@@ -1,17 +1,27 @@
-//
-//  CodexMeterApp.swift
-//  CodexMeter
-//
-//  Created by Kristof Dewilde on 2026-05-05.
-//
-
 import SwiftUI
 
 @main
 struct CodexMeterApp: App {
+    @StateObject private var viewModel: UsageViewModel
+
+    init() {
+        let preferencesStore = PreferencesStore()
+        let viewModel = UsageViewModel(
+            usageService: UsageService(tokenProvider: AuthTokenProvider()),
+            preferencesStore: preferencesStore,
+            appLauncher: AppLauncher(),
+            notificationService: NotificationService()
+        )
+        viewModel.start()
+        _viewModel = StateObject(wrappedValue: viewModel)
+    }
+
     var body: some Scene {
-        WindowGroup {
-            ContentView()
+        MenuBarExtra {
+            UsageMenuView(viewModel: viewModel)
+        } label: {
+            Text(viewModel.statusBarText)
         }
+        .menuBarExtraStyle(.menu)
     }
 }
