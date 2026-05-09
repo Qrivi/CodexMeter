@@ -15,6 +15,15 @@ settings, and shortcuts to Codex and the usage dashboard.
 
 CodexMeter reads the Codex auth file from `~/.codex/auth.json`. It does not ask for or store your password.
 
+## Installation
+
+You can either [download the binary](https://github.com/Qrivi/CodexMeter/releases) or install it via Homebrew:
+
+```sh
+brew tap qrivi/tap
+brew install qrivi/tap/macicon
+```
+
 ## Development
 
 Open `CodexMeter.xcodeproj` in Xcode and run the `CodexMeter` scheme.
