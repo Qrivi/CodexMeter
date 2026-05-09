@@ -41,7 +41,7 @@ enum MenuBarDisplayMode: String, CaseIterable, Identifiable, Sendable {
         case .fiveHourRemaining:
             "5 hour usage limit"
         case .weekRemaining:
-            "Weekly limit"
+            "Weekly usage limit"
         case .both:
             "Both usage limits"
         case .credits:
