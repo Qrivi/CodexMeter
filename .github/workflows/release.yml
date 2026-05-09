@@ -154,3 +154,28 @@ jobs:
           || gh release upload "${{ steps.version.outputs.tag }}" \
             "${{ steps.dmg.outputs.path }}#${{ steps.dmg.outputs.name }}" \
             --clobber
+
+  notify-tap:
+    name: Notify Homebrew tap
+    needs: release
+    runs-on: ubuntu-latest
+    environment: homebrew-tap
+
+    steps:
+      - name: Dispatch tap update
+        env:
+          TAP_DISPATCH_TOKEN: ${{ secrets.TAP_DISPATCH_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${TAP_DISPATCH_TOKEN}" ]]; then
+            echo "TAP_DISPATCH_TOKEN is not configured." >&2
+            exit 1
+          fi
+
+          curl -fsSL -X POST https://api.github.com/repos/Qrivi/homebrew-tap/dispatches \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${TAP_DISPATCH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            --data "{\"event_type\":\"bump-tap\",\"client_payload\":{\"package\":\"codexmeter\",\"repo\":\"Qrivi/CodexMeter\",\"tag\":\"${TAG}\"}}"
