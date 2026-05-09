@@ -13,6 +13,13 @@ jobs:
   release:
     name: Build and release
     runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - arch: arm64
+            display_name: Apple Silicon
+          - arch: x86_64
+            display_name: Intel
 
     steps:
       - name: Check out repository
@@ -50,7 +57,7 @@ jobs:
           echo "number=${build_number}" >> "${GITHUB_OUTPUT}"
           echo "Build number: ${build_number}"
 
-      - name: Build app
+      - name: Build ${{ matrix.display_name }} app
         run: |
           set -euo pipefail
 
@@ -58,18 +65,21 @@ jobs:
             -project CodexMeter.xcodeproj \
             -scheme CodexMeter \
             -configuration Release \
-            -derivedDataPath "${RUNNER_TEMP}/DerivedData" \
+            -derivedDataPath "${RUNNER_TEMP}/DerivedData-${{ matrix.arch }}" \
+            ARCHS="${{ matrix.arch }}" \
+            ONLY_ACTIVE_ARCH=NO \
             CURRENT_PROJECT_VERSION="${{ steps.build.outputs.number }}" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             build
 
-      - name: Verify app bundle
+      - name: Verify ${{ matrix.display_name }} app bundle
         run: |
           set -euo pipefail
 
-          app_path="${RUNNER_TEMP}/DerivedData/Build/Products/Release/CodexMeter.app"
+          app_path="${RUNNER_TEMP}/DerivedData-${{ matrix.arch }}/Build/Products/Release/CodexMeter.app"
+          executable_path="${app_path}/Contents/MacOS/CodexMeter"
           icon_path="${app_path}/Contents/Resources/AppIcon.icns"
           info_plist="${app_path}/Contents/Info.plist"
 
@@ -83,27 +93,39 @@ jobs:
             exit 1
           fi
 
+          if [[ ! -f "${executable_path}" ]]; then
+            echo "Built app is missing ${executable_path}." >&2
+            exit 1
+          fi
+
+          if ! lipo -archs "${executable_path}" | tr ' ' '\n' | grep -Fxq "${{ matrix.arch }}"; then
+            echo "Built executable does not contain the ${{ matrix.arch }} architecture." >&2
+            lipo -archs "${executable_path}" >&2
+            exit 1
+          fi
+
           plist_build_number="$(plutil -extract CFBundleVersion raw -o - "${info_plist}")"
           if [[ "${plist_build_number}" != "${{ steps.build.outputs.number }}" ]]; then
             echo "Expected CFBundleVersion ${{ steps.build.outputs.number }}, got ${plist_build_number}." >&2
             exit 1
           fi
 
-      - name: Create DMG
+      - name: Create ${{ matrix.display_name }} DMG
         id: dmg
         run: |
           set -euo pipefail
 
           tag="${{ steps.version.outputs.tag }}"
-          app_path="${RUNNER_TEMP}/DerivedData/Build/Products/Release/CodexMeter.app"
-          staging_dir="${RUNNER_TEMP}/CodexMeter-dmg"
-          dmg_path="${RUNNER_TEMP}/CodexMeter-${tag}.dmg"
+          app_path="${RUNNER_TEMP}/DerivedData-${{ matrix.arch }}/Build/Products/Release/CodexMeter.app"
+          staging_dir="${RUNNER_TEMP}/CodexMeter-${{ matrix.arch }}-dmg"
+          dmg_path="${RUNNER_TEMP}/CodexMeter-${tag}-${{ matrix.arch }}.dmg"
 
           if [[ ! -d "${app_path}" ]]; then
             echo "Built app was not found at ${app_path}." >&2
             exit 1
           fi
 
+          rm -rf "${staging_dir}"
           mkdir -p "${staging_dir}"
           cp -R "${app_path}" "${staging_dir}/"
           ln -s /Applications "${staging_dir}/Applications"
@@ -116,7 +138,7 @@ jobs:
             "${dmg_path}"
 
           echo "path=${dmg_path}" >> "${GITHUB_OUTPUT}"
-          echo "name=CodexMeter-${tag}.dmg" >> "${GITHUB_OUTPUT}"
+          echo "name=CodexMeter-${tag}-${{ matrix.arch }}.dmg" >> "${GITHUB_OUTPUT}"
 
       - name: Create GitHub release
         env:
@@ -128,4 +150,7 @@ jobs:
             "${{ steps.dmg.outputs.path }}#${{ steps.dmg.outputs.name }}" \
             --title "CodexMeter ${{ steps.version.outputs.tag }}" \
             --notes "CodexMeter ${{ steps.version.outputs.tag }}" \
-            --verify-tag
+            --verify-tag \
+          || gh release upload "${{ steps.version.outputs.tag }}" \
+            "${{ steps.dmg.outputs.path }}#${{ steps.dmg.outputs.name }}" \
+            --clobber
