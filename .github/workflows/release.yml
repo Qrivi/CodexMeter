@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Read tag version
         id: version
@@ -34,6 +36,20 @@ jobs:
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
 
+      - name: Compute build number
+        id: build
+        run: |
+          set -euo pipefail
+
+          build_number="$(git rev-list --count HEAD)"
+          if [[ -z "${build_number}" || "${build_number}" == "0" ]]; then
+            echo "Unable to compute build number." >&2
+            exit 1
+          fi
+
+          echo "number=${build_number}" >> "${GITHUB_OUTPUT}"
+          echo "Build number: ${build_number}"
+
       - name: Build app
         run: |
           set -euo pipefail
@@ -43,10 +59,35 @@ jobs:
             -scheme CodexMeter \
             -configuration Release \
             -derivedDataPath "${RUNNER_TEMP}/DerivedData" \
+            CURRENT_PROJECT_VERSION="${{ steps.build.outputs.number }}" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             build
+
+      - name: Verify app bundle
+        run: |
+          set -euo pipefail
+
+          app_path="${RUNNER_TEMP}/DerivedData/Build/Products/Release/CodexMeter.app"
+          icon_path="${app_path}/Contents/Resources/AppIcon.icns"
+          info_plist="${app_path}/Contents/Info.plist"
+
+          if [[ ! -d "${app_path}" ]]; then
+            echo "Built app was not found at ${app_path}." >&2
+            exit 1
+          fi
+
+          if [[ ! -f "${icon_path}" ]]; then
+            echo "Built app is missing ${icon_path}." >&2
+            exit 1
+          fi
+
+          plist_build_number="$(plutil -extract CFBundleVersion raw -o - "${info_plist}")"
+          if [[ "${plist_build_number}" != "${{ steps.build.outputs.number }}" ]]; then
+            echo "Expected CFBundleVersion ${{ steps.build.outputs.number }}, got ${plist_build_number}." >&2
+            exit 1
+          fi
 
       - name: Create DMG
         id: dmg
@@ -65,6 +106,8 @@ jobs:
 
           mkdir -p "${staging_dir}"
           cp -R "${app_path}" "${staging_dir}/"
+          ln -s /Applications "${staging_dir}/Applications"
+
           hdiutil create \
             -volname "CodexMeter ${{ steps.version.outputs.version }}" \
             -srcfolder "${staging_dir}" \
