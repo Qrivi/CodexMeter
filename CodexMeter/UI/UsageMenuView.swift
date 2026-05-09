@@ -56,7 +56,7 @@ struct UsageMenuView: View {
             viewModel.openUsageDashboard()
         }
 
-        Button("Open Codex") {
+        Button("Open Codex App") {
             viewModel.openCodex()
         }
 
@@ -76,8 +76,9 @@ struct UsageMenuView: View {
     private func usageSections(snapshot: UsageSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             UsageSectionView(section: snapshot.fiveHourSection)
+            Divider()
             UsageSectionView(section: snapshot.weeklySection)
-
+            Divider()
             VStack(alignment: .leading, spacing: 4) {
                 Text("Credits remaining")
                     .font(.headline)

@@ -5,6 +5,8 @@ struct CodexMeterApp: App {
     @StateObject private var viewModel: UsageViewModel
 
     init() {
+        NSApplication.shared.setActivationPolicy(.accessory)
+
         let preferencesStore = PreferencesStore()
         let viewModel = UsageViewModel(
             usageService: UsageService(tokenProvider: AuthTokenProvider()),
