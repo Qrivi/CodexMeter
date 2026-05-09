@@ -53,6 +53,10 @@ final class UsageViewModel: ObservableObject {
         UsageFormatting.statusBarLabel(snapshot: snapshot, mode: statusBarDisplayMode, state: loadState)
     }
 
+    var statusBarTitle: String {
+        statusBarDisplayMode.statusBarTitle
+    }
+
     var isLoadingWithoutSnapshot: Bool {
         snapshot == nil && loadState == .loading
     }

@@ -1,6 +1,12 @@
 import Foundation
 
 final class PreferencesStore {
+    private enum Default {
+        static let pollingInterval: PollingInterval = .minutes5
+        static let statusBarDisplayMode: StatusBarDisplayMode = .both
+        static let notificationThreshold: NotificationThreshold? = nil
+    }
+
     private enum Key {
         static let pollingInterval = "pollingInterval"
         static let statusBarDisplayMode = "statusBarDisplayMode"
@@ -17,7 +23,7 @@ final class PreferencesStore {
         get {
             guard let interval = PollingInterval(rawValue: userDefaults.integer(forKey: Key.pollingInterval)),
                   userDefaults.object(forKey: Key.pollingInterval) != nil else {
-                return .minutes5
+                return Default.pollingInterval
             }
 
             return interval
@@ -31,7 +37,7 @@ final class PreferencesStore {
         get {
             guard let rawValue = userDefaults.string(forKey: Key.statusBarDisplayMode),
                   let displayMode = StatusBarDisplayMode(rawValue: rawValue) else {
-                return .fiveHourRemaining
+                return Default.statusBarDisplayMode
             }
 
             return displayMode
@@ -44,7 +50,7 @@ final class PreferencesStore {
     var notificationThreshold: NotificationThreshold? {
         get {
             guard let value = userDefaults.object(forKey: Key.notificationThreshold) as? Int else {
-                return nil
+                return Default.notificationThreshold
             }
 
             return NotificationThreshold(rawValue: value)

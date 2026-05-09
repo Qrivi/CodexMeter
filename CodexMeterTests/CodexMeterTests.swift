@@ -22,7 +22,22 @@ struct CodexMeterTests {
             timeZone: TimeZone(secondsFromGMT: 0)!
         )
 
-        #expect(text == "Resets in 4h 28m · Resets at 2:35 PM")
+        #expect(text == "Resets 2:35 PM (4h 28m)")
+    }
+
+    @Test
+    func formattingBuildsResetTextWithDateWhenResetIsAnotherDay() {
+        let now = Date(timeIntervalSince1970: 1_778_054_820) // 2026-05-05 10:07 UTC
+        let resetDate = Date(timeIntervalSince1970: 1_778_141_800) // 2026-05-06 10:30 UTC
+
+        let text = UsageFormatting.resetText(
+            resetDate: resetDate,
+            now: now,
+            locale: Locale(identifier: "en_US_POSIX"),
+            timeZone: TimeZone(secondsFromGMT: 0)!
+        )
+
+        #expect(text == "Resets May 6, 2026 10:30 AM (1d 0h)")
     }
 
     @Test
@@ -56,7 +71,7 @@ struct CodexMeterTests {
         let store = PreferencesStore(userDefaults: defaults)
 
         #expect(store.pollingInterval == .minutes5)
-        #expect(store.statusBarDisplayMode == .fiveHourRemaining)
+        #expect(store.statusBarDisplayMode == .both)
         #expect(store.notificationThreshold == nil)
     }
 
@@ -359,6 +374,7 @@ struct CodexMeterTests {
         try await Task.sleep(nanoseconds: 50_000_000)
         viewModel.selectStatusBarDisplayMode(.credits)
 
+        #expect(viewModel.statusBarTitle == "Credits")
         #expect(viewModel.statusBarText == "12 cr")
     }
 
@@ -530,20 +546,18 @@ private func makeSnapshot(
 ) -> UsageSnapshot {
     UsageSnapshot(
         fiveHourSection: UsageSectionViewData(
-            title: "5-Hour Limit",
+            title: "5 hour limit",
             remainingText: "\(fiveHourRemaining)% remaining",
-            progressValue: Double(100 - fiveHourRemaining) / 100,
-            resetText: "Resets in 4h 28m · Resets at 2:35 PM",
+            resetText: "Resets 2:35 PM (4h 28m)",
             remainingPercent: fiveHourRemaining,
             level: UsageFormatting.level(for: fiveHourRemaining),
             resetDate: fiveHourReset,
             windowKind: .fiveHour
         ),
         weeklySection: UsageSectionViewData(
-            title: "Weekly Limit",
+            title: "Weekly limit",
             remainingText: "\(weeklyRemaining)% remaining",
-            progressValue: Double(100 - weeklyRemaining) / 100,
-            resetText: "Resets in 1d 0h · Resets at 10:30 AM",
+            resetText: "Resets May 6, 2026 10:30 AM (1d 0h)",
             remainingPercent: weeklyRemaining,
             level: UsageFormatting.level(for: weeklyRemaining),
             resetDate: weeklyReset,

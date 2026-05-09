@@ -29,13 +29,38 @@ enum PollingInterval: Int, CaseIterable, Identifiable, Sendable {
 }
 
 enum StatusBarDisplayMode: String, CaseIterable, Identifiable, Sendable {
-    case fiveHourRemaining = "5h Remaining %"
-    case weekRemaining = "Week Remaining %"
-    case both = "Both"
-    case credits = "Credits"
-    case minimal = "Minimal"
+    case both = "both"
+    case fiveHourRemaining = "five_hour_remaining"
+    case weekRemaining = "week_remaining"
+    case credits = "credits"
 
     var id: String { rawValue }
+
+    var menuTitle: String {
+        switch self {
+        case .fiveHourRemaining:
+            "5 hour usage limit"
+        case .weekRemaining:
+            "Weekly limit"
+        case .both:
+            "Both limits"
+        case .credits:
+            "Credits remaining"
+        }
+    }
+
+    var statusBarTitle: String {
+        switch self {
+        case .fiveHourRemaining:
+            "5 hour"
+        case .weekRemaining:
+            "Weekly"
+        case .both:
+            "Limits"
+        case .credits:
+            "Credits"
+        }
+    }
 }
 
 enum NotificationThreshold: Int, CaseIterable, Identifiable, Sendable {
@@ -73,18 +98,18 @@ enum UsageWindowKind: String, Sendable {
     nonisolated var sectionTitle: String {
         switch self {
         case .fiveHour:
-            "5-Hour Limit"
+            "5 hour limit"
         case .weekly:
-            "Weekly Limit"
+            "Weekly limit"
         }
     }
 
     nonisolated var notificationTitle: String {
         switch self {
         case .fiveHour:
-            "Codex 5-hour usage is low"
+            "Codex 5 hour usage limit is low"
         case .weekly:
-            "Codex weekly usage is low"
+            "Codex weekly usage limit is low"
         }
     }
 }
@@ -92,7 +117,6 @@ enum UsageWindowKind: String, Sendable {
 struct UsageSectionViewData: Equatable, Sendable {
     let title: String
     let remainingText: String
-    let progressValue: Double?
     let resetText: String?
     let remainingPercent: Int?
     let level: UsageLevel
@@ -103,7 +127,6 @@ struct UsageSectionViewData: Equatable, Sendable {
         UsageSectionViewData(
             title: kind.sectionTitle,
             remainingText: "Unavailable",
-            progressValue: nil,
             resetText: nil,
             remainingPercent: nil,
             level: .neutral,

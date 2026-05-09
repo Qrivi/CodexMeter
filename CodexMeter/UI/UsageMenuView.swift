@@ -79,7 +79,7 @@ struct UsageMenuView: View {
             UsageSectionView(section: snapshot.weeklySection)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Credits Remaining")
+                Text("Credits remaining")
                     .font(.headline)
                 Text(snapshot.creditsText)
             }
@@ -104,7 +104,7 @@ struct UsageMenuView: View {
                 Button {
                     viewModel.selectStatusBarDisplayMode(mode)
                 } label: {
-                    menuRowLabel(title: mode.rawValue, isSelected: viewModel.statusBarDisplayMode == mode)
+                    menuRowLabel(title: mode.menuTitle, isSelected: viewModel.statusBarDisplayMode == mode)
                 }
             }
         }
@@ -148,12 +148,6 @@ private struct UsageSectionView: View {
 
             Text(section.remainingText)
                 .foregroundStyle(color(for: section.level))
-
-            if let progressValue = section.progressValue {
-                ProgressView(value: progressValue)
-                    .progressViewStyle(.linear)
-                    .tint(color(for: section.level))
-            }
 
             if let resetText = section.resetText {
                 Text(resetText)

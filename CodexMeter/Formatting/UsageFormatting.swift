@@ -30,7 +30,6 @@ enum UsageFormatting {
         return UsageSectionViewData(
             title: kind.sectionTitle,
             remainingText: "\(remainingPercent)% remaining",
-            progressValue: progressValue(from: window.usedPercent),
             resetText: resetText(resetDate: resetDate, now: now),
             remainingPercent: remainingPercent,
             level: level(for: remainingPercent),
@@ -46,14 +45,6 @@ enum UsageFormatting {
 
         let used = Int(usedPercent.rounded())
         return max(0, min(100, 100 - used))
-    }
-
-    static func progressValue(from usedPercent: Double?) -> Double? {
-        guard let usedPercent else {
-            return nil
-        }
-
-        return min(max(usedPercent / 100.0, 0), 1)
     }
 
     static func resetDate(for window: UsageWindow, now: Date = Date()) -> Date? {
@@ -78,16 +69,16 @@ enum UsageFormatting {
             return nil
         }
 
+        let absolute = absoluteResetText(resetDate: resetDate, now: now, locale: locale, timeZone: timeZone)
         let relative = relativeResetText(resetDate: resetDate, now: now)
-        let absolute = absoluteResetText(resetDate: resetDate, locale: locale, timeZone: timeZone)
-        return "\(relative) · \(absolute)"
+        return "\(absolute) (\(relative))"
     }
 
     static func relativeResetText(resetDate: Date, now: Date = Date()) -> String {
         let seconds = max(Int(resetDate.timeIntervalSince(now)), 0)
 
         if seconds < 60 {
-            return "Resets in <1m"
+            return "<1m"
         }
 
         let days = seconds / 86_400
@@ -108,20 +99,38 @@ enum UsageFormatting {
             parts.append("\(minutes)m")
         }
 
-        return "Resets in \(parts.joined(separator: " "))"
+        return parts.joined(separator: " ")
     }
 
     static func absoluteResetText(
         resetDate: Date,
+        now: Date = Date(),
         locale: Locale = .current,
         timeZone: TimeZone = .current
     ) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = locale
-        formatter.timeZone = timeZone
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        return "Resets at \(formatter.string(from: resetDate))"
+        let calendar = calendar(locale: locale, timeZone: timeZone)
+        let timeFormatter = DateFormatter()
+        timeFormatter.locale = locale
+        timeFormatter.timeZone = timeZone
+        timeFormatter.dateStyle = .none
+        timeFormatter.timeStyle = .short
+
+        if calendar.isDate(resetDate, inSameDayAs: now) {
+            return "Resets \(timeFormatter.string(from: resetDate))"
+        }
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.locale = locale
+        dateFormatter.timeZone = timeZone
+        dateFormatter.dateFormat = "MMMM d, yyyy"
+        return "Resets \(dateFormatter.string(from: resetDate)) \(timeFormatter.string(from: resetDate))"
+    }
+
+    private static func calendar(locale: Locale, timeZone: TimeZone) -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = locale
+        calendar.timeZone = timeZone
+        return calendar
     }
 
     static func creditsText(from credits: CreditsInfo?) -> String {
@@ -165,7 +174,7 @@ enum UsageFormatting {
         state: UsageLoadState
     ) -> String {
         guard let snapshot else {
-            return mode == .minimal ? "•" : fallbackLabel(for: state)
+            return fallbackLabel(for: state)
         }
 
         switch mode {
@@ -174,11 +183,9 @@ enum UsageFormatting {
         case .weekRemaining:
             return percentLabel(for: snapshot.weeklySection.remainingPercent)
         case .both:
-            return "\(compactPercentLabel(for: snapshot.fiveHourSection.remainingPercent))/\(compactPercentLabel(for: snapshot.weeklySection.remainingPercent))"
+            return "\(percentLabel(for: snapshot.fiveHourSection.remainingPercent))/\(percentLabel(for: snapshot.weeklySection.remainingPercent))"
         case .credits:
             return creditsStatusLabel(from: snapshot.creditsText)
-        case .minimal:
-            return "•"
         }
     }
 
@@ -197,14 +204,6 @@ enum UsageFormatting {
         }
 
         return "\(remainingPercent)%"
-    }
-
-    private static func compactPercentLabel(for remainingPercent: Int?) -> String {
-        guard let remainingPercent else {
-            return "--"
-        }
-
-        return String(remainingPercent)
     }
 
     private static func creditsStatusLabel(from creditsText: String) -> String {
