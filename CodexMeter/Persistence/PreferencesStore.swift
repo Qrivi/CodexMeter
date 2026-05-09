@@ -3,13 +3,14 @@ import Foundation
 final class PreferencesStore {
     private enum Default {
         static let pollingInterval: PollingInterval = .minutes5
-        static let statusBarDisplayMode: StatusBarDisplayMode = .both
+        static let menuBarDisplayMode: MenuBarDisplayMode = .both
         static let notificationThreshold: NotificationThreshold? = nil
     }
 
     private enum Key {
         static let pollingInterval = "pollingInterval"
-        static let statusBarDisplayMode = "statusBarDisplayMode"
+        static let menuBarDisplayMode = "menuBarDisplayMode"
+        static let legacyMenuBarDisplayMode = "statusBarDisplayMode"
         static let notificationThreshold = "notificationThreshold"
     }
 
@@ -33,17 +34,18 @@ final class PreferencesStore {
         }
     }
 
-    var statusBarDisplayMode: StatusBarDisplayMode {
+    var menuBarDisplayMode: MenuBarDisplayMode {
         get {
-            guard let rawValue = userDefaults.string(forKey: Key.statusBarDisplayMode),
-                  let displayMode = StatusBarDisplayMode(rawValue: rawValue) else {
-                return Default.statusBarDisplayMode
+            guard let rawValue = userDefaults.string(forKey: Key.menuBarDisplayMode)
+                ?? userDefaults.string(forKey: Key.legacyMenuBarDisplayMode),
+                  let displayMode = MenuBarDisplayMode(rawValue: rawValue) else {
+                return Default.menuBarDisplayMode
             }
 
             return displayMode
         }
         set {
-            userDefaults.set(newValue.rawValue, forKey: Key.statusBarDisplayMode)
+            userDefaults.set(newValue.rawValue, forKey: Key.menuBarDisplayMode)
         }
     }
 

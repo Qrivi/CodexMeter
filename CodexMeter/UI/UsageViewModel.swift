@@ -7,7 +7,7 @@ final class UsageViewModel: ObservableObject {
     @Published private(set) var snapshot: UsageSnapshot?
     @Published private(set) var loadState: UsageLoadState = .idle
     @Published private(set) var pollingInterval: PollingInterval
-    @Published private(set) var statusBarDisplayMode: StatusBarDisplayMode
+    @Published private(set) var menuBarDisplayMode: MenuBarDisplayMode
     @Published private(set) var notificationThreshold: NotificationThreshold?
 
     private let usageService: UsageFetching
@@ -39,7 +39,7 @@ final class UsageViewModel: ObservableObject {
         self.wakeNotificationCenter = wakeNotificationCenter
         self.now = now
         self.pollingInterval = preferencesStore.pollingInterval
-        self.statusBarDisplayMode = preferencesStore.statusBarDisplayMode
+        self.menuBarDisplayMode = preferencesStore.menuBarDisplayMode
         self.notificationThreshold = preferencesStore.notificationThreshold
     }
 
@@ -49,12 +49,12 @@ final class UsageViewModel: ObservableObject {
         wakeObserverTask?.cancel()
     }
 
-    var statusBarText: String {
-        UsageFormatting.statusBarLabel(snapshot: snapshot, mode: statusBarDisplayMode, state: loadState)
+    var menuBarText: String {
+        UsageFormatting.menuBarLabel(snapshot: snapshot, mode: menuBarDisplayMode, state: loadState)
     }
 
-    var statusBarTitle: String {
-        statusBarDisplayMode.statusBarTitle
+    var menuBarTitle: String {
+        menuBarDisplayMode.menuBarTitle
     }
 
     var isLoadingWithoutSnapshot: Bool {
@@ -103,9 +103,9 @@ final class UsageViewModel: ObservableObject {
         schedulePolling()
     }
 
-    func selectStatusBarDisplayMode(_ mode: StatusBarDisplayMode) {
-        statusBarDisplayMode = mode
-        preferencesStore.statusBarDisplayMode = mode
+    func selectMenuBarDisplayMode(_ mode: MenuBarDisplayMode) {
+        menuBarDisplayMode = mode
+        preferencesStore.menuBarDisplayMode = mode
     }
 
     func selectNotificationThreshold(_ threshold: NotificationThreshold?) {

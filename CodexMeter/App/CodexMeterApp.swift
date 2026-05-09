@@ -23,13 +23,13 @@ struct CodexMeterApp: App {
         MenuBarExtra {
             UsageMenuView(viewModel: viewModel)
         } label: {
-            Image(nsImage: StatusBarLabelImage.make(title: viewModel.statusBarTitle, value: viewModel.statusBarText))
+            Image(nsImage: MenuBarLabelImage.make(title: viewModel.menuBarTitle, value: viewModel.menuBarText))
         }
         .menuBarExtraStyle(.menu)
     }
 }
 
-private enum StatusBarLabelImage {
+private enum MenuBarLabelImage {
     private static let height: CGFloat = 22
     private static let labelFont = NSFont.systemFont(ofSize: 7, weight: .regular)
     private static let valueFont = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)

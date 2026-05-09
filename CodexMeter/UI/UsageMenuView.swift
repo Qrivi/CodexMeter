@@ -63,7 +63,7 @@ struct UsageMenuView: View {
         Divider()
 
         pollingRateMenu
-        statusBarMenu
+        menuBarMenu
         notificationsMenu
 
         Divider()
@@ -99,13 +99,13 @@ struct UsageMenuView: View {
         }
     }
 
-    private var statusBarMenu: some View {
-        Menu("Show in Status Bar") {
-            ForEach(StatusBarDisplayMode.allCases) { mode in
+    private var menuBarMenu: some View {
+        Menu("Show in Menu Bar") {
+            ForEach(MenuBarDisplayMode.allCases) { mode in
                 selectionToggle(
                     mode.menuTitle,
-                    isSelected: viewModel.statusBarDisplayMode == mode,
-                    select: { viewModel.selectStatusBarDisplayMode(mode) }
+                    isSelected: viewModel.menuBarDisplayMode == mode,
+                    select: { viewModel.selectMenuBarDisplayMode(mode) }
                 )
             }
         }

@@ -71,7 +71,7 @@ struct CodexMeterTests {
         let store = PreferencesStore(userDefaults: defaults)
 
         #expect(store.pollingInterval == .minutes5)
-        #expect(store.statusBarDisplayMode == .both)
+        #expect(store.menuBarDisplayMode == .both)
         #expect(store.notificationThreshold == nil)
     }
 
@@ -82,13 +82,13 @@ struct CodexMeterTests {
 
         var store = PreferencesStore(userDefaults: defaults)
         store.pollingInterval = .minutes10
-        store.statusBarDisplayMode = .both
+        store.menuBarDisplayMode = .both
         store.notificationThreshold = .ten
 
         store = PreferencesStore(userDefaults: defaults)
 
         #expect(store.pollingInterval == .minutes10)
-        #expect(store.statusBarDisplayMode == .both)
+        #expect(store.menuBarDisplayMode == .both)
         #expect(store.notificationThreshold == .ten)
     }
 
@@ -384,7 +384,7 @@ struct CodexMeterTests {
 
     @MainActor
     @Test
-    func viewModelUpdatesStatusLabelWhenDisplayModeChanges() async throws {
+    func viewModelUpdatesMenuBarLabelWhenDisplayModeChanges() async throws {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
         let store = PreferencesStore(userDefaults: defaults)
@@ -392,10 +392,10 @@ struct CodexMeterTests {
 
         viewModel.refreshNow()
         try await waitUntil { viewModel.loadState == .loaded }
-        viewModel.selectStatusBarDisplayMode(.credits)
+        viewModel.selectMenuBarDisplayMode(.credits)
 
-        #expect(viewModel.statusBarTitle == "Credits")
-        #expect(viewModel.statusBarText == "12 cr")
+        #expect(viewModel.menuBarTitle == "Credits")
+        #expect(viewModel.menuBarText == "12 cr")
     }
 
     @Test
@@ -596,7 +596,7 @@ private func makeSnapshot(
 ) -> UsageSnapshot {
     UsageSnapshot(
         fiveHourSection: UsageSectionViewData(
-            title: "5 hour limit",
+            title: "5 hour usage limit",
             remainingText: "\(fiveHourRemaining)% remaining",
             resetText: "Resets 2:35 PM (4h 28m)",
             remainingPercent: fiveHourRemaining,
@@ -605,7 +605,7 @@ private func makeSnapshot(
             windowKind: .fiveHour
         ),
         weeklySection: UsageSectionViewData(
-            title: "Weekly limit",
+            title: "Weekly usage limit",
             remainingText: "\(weeklyRemaining)% remaining",
             resetText: "Resets May 6, 2026 10:30 AM (1d 0h)",
             remainingPercent: weeklyRemaining,

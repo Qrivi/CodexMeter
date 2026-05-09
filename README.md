@@ -1,4 +1,4 @@
-<img src="./.github/screenshot.png" width="30%" align="right" alt="CodexMeter in the menu bar">
+<img src="./.github/screenshot.png" width="40%" align="right" alt="CodexMeter in the menu bar">
 
 # CodexMeter
 
@@ -30,7 +30,7 @@ xcodebuild -project CodexMeter.xcodeproj -scheme CodexMeter test
 The app stores local preferences in `UserDefaults`, including:
 
 - polling interval
-- status bar display mode
+- menu bar display mode
 - notification threshold
 
 New installs default to showing both usage limits in the menu bar.
