@@ -156,24 +156,34 @@ final class UsageViewModel: ObservableObject {
             loadState = .loading
         }
 
-        refreshTask = Task { @MainActor [weak self] in
-            guard let self else {
-                return
-            }
-
-            defer {
-                refreshTask = nil
-            }
-
+        refreshTask = Task.detached { [weak self, usageService, notificationService] in
             do {
                 let freshSnapshot = try await usageService.fetchUsageSnapshot()
-                snapshot = freshSnapshot
-                loadState = .loaded
-                await notificationService.evaluateNotifications(for: freshSnapshot, threshold: notificationThreshold)
+
+                let threshold: NotificationThreshold? = await MainActor.run { [weak self] in
+                    guard let self, Task.isCancelled == false else {
+                        return nil
+                    }
+
+                    snapshot = freshSnapshot
+                    loadState = .loaded
+                    return notificationThreshold
+                }
+
+                await notificationService.evaluateNotifications(for: freshSnapshot, threshold: threshold)
             } catch let error as UsageServiceError {
-                handleRefreshFailure(error)
+                await MainActor.run { [weak self] in
+                    self?.handleRefreshFailure(error)
+                }
             } catch {
-                handleRefreshFailure(.network(error.localizedDescription))
+                let message = error.localizedDescription
+                await MainActor.run { [weak self] in
+                    self?.handleRefreshFailure(.network(message))
+                }
+            }
+
+            await MainActor.run { [weak self] in
+                self?.refreshTask = nil
             }
         }
     }

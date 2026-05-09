@@ -288,13 +288,33 @@ struct CodexMeterTests {
         #expect(await tracker.identifiers == ["codexmeter-fiveHour-20", "codexmeter-weekly-20"])
     }
 
+    @Test
+    func notificationsBecomeEligibleAgainWhenThresholdChanges() async {
+        let tracker = NotificationTracker()
+        let service = NotificationService(
+            authorizationRequester: { true },
+            authorizationStatusProvider: { .authorized },
+            requestDeliverer: { request in
+                await tracker.record(identifier: request.identifier)
+            }
+        )
+
+        let snapshot = makeSnapshot(fiveHourRemaining: 9, weeklyRemaining: 50)
+        await service.updateThreshold(.ten)
+        await service.evaluateNotifications(for: snapshot, threshold: .ten)
+        await service.updateThreshold(.twenty)
+        await service.evaluateNotifications(for: snapshot, threshold: .twenty)
+
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-10", "codexmeter-fiveHour-20"])
+    }
+
     @MainActor
     @Test
     func viewModelLaunchRefreshPopulatesSnapshot() async throws {
         let viewModel = makeViewModel(service: MockUsageFetcher(results: [.success(makeSnapshot())]))
 
         viewModel.start()
-        try await Task.sleep(nanoseconds: 50_000_000)
+        try await waitUntil { viewModel.loadState == .loaded }
 
         #expect(viewModel.snapshot?.fiveHourSection.remainingPercent == 64)
         #expect(viewModel.loadState == .loaded)
@@ -309,11 +329,11 @@ struct CodexMeterTests {
 
         viewModel.refreshNow()
         viewModel.refreshNow()
-        try await Task.sleep(nanoseconds: 50_000_000)
+        await tracker.waitUntilCalled()
 
         #expect(await tracker.callCount == 1)
         await tracker.resume()
-        try await Task.sleep(nanoseconds: 50_000_000)
+        try await waitUntil { viewModel.loadState == .loaded }
     }
 
     @MainActor
@@ -326,9 +346,9 @@ struct CodexMeterTests {
         ]))
 
         viewModel.refreshNow()
-        try await Task.sleep(nanoseconds: 50_000_000)
+        try await waitUntil { viewModel.loadState == .loaded }
         viewModel.refreshNow()
-        try await Task.sleep(nanoseconds: 50_000_000)
+        try await waitUntil { viewModel.snapshot?.warningMessage == "Update failed" }
 
         #expect(viewModel.snapshot?.fiveHourSection.remainingPercent == initialSnapshot.fiveHourSection.remainingPercent)
         #expect(viewModel.snapshot?.warningMessage == "Update failed")
@@ -340,7 +360,7 @@ struct CodexMeterTests {
         let viewModel = makeViewModel(service: MockUsageFetcher(results: [.failure(UsageServiceError.unauthorized)]))
 
         viewModel.refreshNow()
-        try await Task.sleep(nanoseconds: 50_000_000)
+        try await waitUntil { viewModel.loadState == .authFailure(message: "Auth token unavailable. Open Codex to refresh it.") }
 
         #expect(viewModel.currentFailureMessage == "Auth token unavailable. Open Codex to refresh it.")
         #expect(viewModel.loadState == .authFailure(message: "Auth token unavailable. Open Codex to refresh it."))
@@ -371,7 +391,7 @@ struct CodexMeterTests {
         let viewModel = makeViewModel(service: MockUsageFetcher(results: [.success(makeSnapshot())]), preferencesStore: store)
 
         viewModel.refreshNow()
-        try await Task.sleep(nanoseconds: 50_000_000)
+        try await waitUntil { viewModel.loadState == .loaded }
         viewModel.selectStatusBarDisplayMode(.credits)
 
         #expect(viewModel.statusBarTitle == "Credits")
@@ -456,27 +476,36 @@ private actor BlockingUsageFetcher: UsageFetching {
     }
 
     func fetchUsageSnapshot() async throws -> UsageSnapshot {
-        await tracker.increment()
-        await tracker.waitUntilResumed()
+        await tracker.recordCallAndWaitUntilResumed()
         return snapshot
     }
 }
 
 private actor RefreshTracker {
     private var callCountValue = 0
+    private var callContinuation: CheckedContinuation<Void, Never>?
     private var continuation: CheckedContinuation<Void, Never>?
 
     var callCount: Int {
         get { callCountValue }
     }
 
-    func increment() {
+    func recordCallAndWaitUntilResumed() async {
         callCountValue += 1
-    }
-
-    func waitUntilResumed() async {
         await withCheckedContinuation { continuation in
             self.continuation = continuation
+            callContinuation?.resume()
+            callContinuation = nil
+        }
+    }
+
+    func waitUntilCalled() async {
+        if callCountValue > 0 {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            callContinuation = continuation
         }
     }
 
@@ -516,6 +545,27 @@ private struct MockNotificationService: NotificationScheduling {
     func requestAuthorizationIfNeeded() async -> Bool { true }
     func updateThreshold(_ threshold: NotificationThreshold?) async {}
     func evaluateNotifications(for snapshot: UsageSnapshot, threshold: NotificationThreshold?) async {}
+}
+
+private enum WaitTimeout: Error {
+    case timedOut
+}
+
+@MainActor
+private func waitUntil(
+    timeout: Duration = .seconds(1),
+    condition: @escaping @MainActor () -> Bool
+) async throws {
+    let clock = ContinuousClock()
+    let deadline = clock.now.advanced(by: timeout)
+
+    while condition() == false {
+        if clock.now >= deadline {
+            throw WaitTimeout.timedOut
+        }
+
+        try await Task.sleep(for: .milliseconds(10))
+    }
 }
 
 private struct MockAppLauncher: AppLaunching {

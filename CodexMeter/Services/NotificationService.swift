@@ -10,6 +10,7 @@ actor NotificationService: NotificationScheduling {
     private let authorizationRequester: @Sendable () async -> Bool
     private let authorizationStatusProvider: @Sendable () async -> UNAuthorizationStatus
     private let requestDeliverer: @Sendable (UNNotificationRequest) async -> Void
+    private var currentThreshold: NotificationThreshold?
     private var stateByWindow: [UsageWindowKind: NotificationState] = [:]
 
     init(center: UNUserNotificationCenter = .current()) {
@@ -56,9 +57,11 @@ actor NotificationService: NotificationScheduling {
     }
 
     func updateThreshold(_ threshold: NotificationThreshold?) async {
-        if threshold == nil {
+        if threshold != currentThreshold {
             stateByWindow.removeAll()
         }
+
+        currentThreshold = threshold
     }
 
     func evaluateNotifications(for snapshot: UsageSnapshot, threshold: NotificationThreshold?) async {
