@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and release
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Read tag version
+        id: version
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+
+          if [[ -z "${version}" || "${version}" == "${tag}" ]]; then
+            echo "Release tags must use the v<version> format." >&2
+            exit 1
+          fi
+
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build app
+        run: |
+          set -euo pipefail
+
+          xcodebuild \
+            -project CodexMeter.xcodeproj \
+            -scheme CodexMeter \
+            -configuration Release \
+            -derivedDataPath "${RUNNER_TEMP}/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Create DMG
+        id: dmg
+        run: |
+          set -euo pipefail
+
+          tag="${{ steps.version.outputs.tag }}"
+          app_path="${RUNNER_TEMP}/DerivedData/Build/Products/Release/CodexMeter.app"
+          staging_dir="${RUNNER_TEMP}/CodexMeter-dmg"
+          dmg_path="${RUNNER_TEMP}/CodexMeter-${tag}.dmg"
+
+          if [[ ! -d "${app_path}" ]]; then
+            echo "Built app was not found at ${app_path}." >&2
+            exit 1
+          fi
+
+          mkdir -p "${staging_dir}"
+          cp -R "${app_path}" "${staging_dir}/"
+          hdiutil create \
+            -volname "CodexMeter ${{ steps.version.outputs.version }}" \
+            -srcfolder "${staging_dir}" \
+            -ov \
+            -format UDZO \
+            "${dmg_path}"
+
+          echo "path=${dmg_path}" >> "${GITHUB_OUTPUT}"
+          echo "name=CodexMeter-${tag}.dmg" >> "${GITHUB_OUTPUT}"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          gh release create "${{ steps.version.outputs.tag }}" \
+            "${{ steps.dmg.outputs.path }}#${{ steps.dmg.outputs.name }}" \
+            --title "CodexMeter ${{ steps.version.outputs.tag }}" \
+            --notes "CodexMeter ${{ steps.version.outputs.tag }}" \
+            --verify-tag

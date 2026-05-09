@@ -1,0 +1,116 @@
+name: Version tag
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-version-tag:
+    name: Validate version tag
+    if: github.event_name == 'pull_request'
+    runs-on: macos-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read app version
+        id: version
+        run: |
+          set -euo pipefail
+
+          version="$(xcodebuild -showBuildSettings \
+            -project CodexMeter.xcodeproj \
+            -scheme CodexMeter \
+            -configuration Release \
+            | awk -F'= ' '/MARKETING_VERSION/ {print $2; exit}')"
+
+          if [[ -z "${version}" ]]; then
+            echo "Unable to read MARKETING_VERSION from the CodexMeter target." >&2
+            exit 1
+          fi
+
+          tag="v${version}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "CodexMeter version: ${version}"
+          echo "Expected tag: ${tag}"
+
+      - name: Fail if version tag already exists
+        run: |
+          set -euo pipefail
+
+          git fetch --tags --force
+
+          if git rev-parse --verify --quiet "refs/tags/${{ steps.version.outputs.tag }}"; then
+            echo "Tag ${{ steps.version.outputs.tag }} already exists. Bump MARKETING_VERSION before merging to main." >&2
+            exit 1
+          fi
+
+  create-version-tag:
+    name: Create version tag
+    if: github.event_name == 'push'
+    runs-on: macos-latest
+    permissions:
+      actions: write
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read app version
+        id: version
+        run: |
+          set -euo pipefail
+
+          version="$(xcodebuild -showBuildSettings \
+            -project CodexMeter.xcodeproj \
+            -scheme CodexMeter \
+            -configuration Release \
+            | awk -F'= ' '/MARKETING_VERSION/ {print $2; exit}')"
+
+          if [[ -z "${version}" ]]; then
+            echo "Unable to read MARKETING_VERSION from the CodexMeter target." >&2
+            exit 1
+          fi
+
+          tag="v${version}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "CodexMeter version: ${version}"
+          echo "Expected tag: ${tag}"
+
+      - name: Create and push tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          git fetch --tags --force
+
+          tag="${{ steps.version.outputs.tag }}"
+          if git rev-parse --verify --quiet "refs/tags/${tag}"; then
+            echo "Tag ${tag} already exists. Bump MARKETING_VERSION before pushing to main." >&2
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${tag}" -m "CodexMeter ${{ steps.version.outputs.version }}"
+          git push origin "${tag}"
+          gh workflow run release.yml --ref "${tag}"
