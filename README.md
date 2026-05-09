@@ -1,3 +1,5 @@
+<img src="./.github/screenshot.png" width="30%" align="right" alt="CodexMeter in the menu bar">
+
 # CodexMeter
 
 CodexMeter is a small macOS menu bar app for keeping an eye on Codex usage limits.

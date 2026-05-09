@@ -89,11 +89,11 @@ struct UsageMenuView: View {
     private var pollingRateMenu: some View {
         Menu("Polling Rate") {
             ForEach(PollingInterval.allCases) { interval in
-                Button {
-                    viewModel.selectPollingInterval(interval)
-                } label: {
-                    menuRowLabel(title: interval.title, isSelected: viewModel.pollingInterval == interval)
-                }
+                selectionToggle(
+                    interval.title,
+                    isSelected: viewModel.pollingInterval == interval,
+                    select: { viewModel.selectPollingInterval(interval) }
+                )
             }
         }
     }
@@ -101,40 +101,53 @@ struct UsageMenuView: View {
     private var statusBarMenu: some View {
         Menu("Show in Status Bar") {
             ForEach(StatusBarDisplayMode.allCases) { mode in
-                Button {
-                    viewModel.selectStatusBarDisplayMode(mode)
-                } label: {
-                    menuRowLabel(title: mode.menuTitle, isSelected: viewModel.statusBarDisplayMode == mode)
-                }
+                selectionToggle(
+                    mode.menuTitle,
+                    isSelected: viewModel.statusBarDisplayMode == mode,
+                    select: { viewModel.selectStatusBarDisplayMode(mode) }
+                )
             }
         }
     }
 
     private var notificationsMenu: some View {
         Menu("Notifications") {
-            Button {
-                viewModel.selectNotificationThreshold(nil)
-            } label: {
-                menuRowLabel(title: "Off", isSelected: viewModel.notificationThreshold == nil)
-            }
+            selectionToggle(
+                "Off",
+                isSelected: viewModel.notificationThreshold == nil,
+                select: { viewModel.selectNotificationThreshold(nil) }
+            )
 
             ForEach(NotificationThreshold.allCases) { threshold in
-                Button {
-                    viewModel.selectNotificationThreshold(threshold)
-                } label: {
-                    menuRowLabel(title: threshold.title, isSelected: viewModel.notificationThreshold == threshold)
-                }
+                selectionToggle(
+                    threshold.title,
+                    isSelected: viewModel.notificationThreshold == threshold,
+                    select: { viewModel.selectNotificationThreshold(threshold) }
+                )
             }
         }
     }
 
-    @ViewBuilder
-    private func menuRowLabel(title: String, isSelected: Bool) -> some View {
-        if isSelected {
-            Label(title, systemImage: "checkmark")
-        } else {
-            Text(title)
-        }
+    private func selectionToggle(
+        _ title: String,
+        isSelected: Bool,
+        select: @escaping () -> Void
+    ) -> some View {
+        Toggle(
+            "  \(title)",
+            isOn: selectionBinding(isSelected: isSelected, select: select)
+        )
+    }
+
+    private func selectionBinding(isSelected: Bool, select: @escaping () -> Void) -> Binding<Bool> {
+        Binding(
+            get: { isSelected },
+            set: { newValue in
+                if newValue {
+                    select()
+                }
+            }
+        )
     }
 }
 
@@ -142,7 +155,7 @@ private struct UsageSectionView: View {
     let section: UsageSectionViewData
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading) {
             Text(section.title)
                 .font(.headline)
 

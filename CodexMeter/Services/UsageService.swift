@@ -4,7 +4,8 @@ struct UsageService: UsageFetching {
     static let endpoint = URL(string: "https://chatgpt.com/backend-api/wham/usage")!
 
     private let tokenProvider: TokenProviding
-    private let requestPerformer: @Sendable (URLRequest) async throws -> (Data, URLResponse)
+    private let session: URLSession
+    private let requestPerformer: (@Sendable (URLRequest) async throws -> (Data, URLResponse))?
     private let now: @Sendable () -> Date
 
     init(
@@ -14,10 +15,9 @@ struct UsageService: UsageFetching {
         requestPerformer: (@Sendable (URLRequest) async throws -> (Data, URLResponse))? = nil
     ) {
         self.tokenProvider = tokenProvider
+        self.session = session
         self.now = now
-        self.requestPerformer = requestPerformer ?? { request in
-            try await session.data(for: request)
-        }
+        self.requestPerformer = requestPerformer
     }
 
     func fetchUsageSnapshot() async throws -> UsageSnapshot {
@@ -44,7 +44,11 @@ struct UsageService: UsageFetching {
         let response: URLResponse
 
         do {
-            (data, response) = try await requestPerformer(request)
+            if let requestPerformer {
+                (data, response) = try await requestPerformer(request)
+            } else {
+                (data, response) = try await session.data(for: request)
+            }
         } catch let error as URLError {
             throw UsageServiceError.network(error.localizedDescription)
         } catch {
