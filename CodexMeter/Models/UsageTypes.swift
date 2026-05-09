@@ -28,7 +28,7 @@ enum PollingInterval: Int, CaseIterable, Identifiable, Sendable {
     }
 }
 
-enum StatusBarDisplayMode: String, CaseIterable, Identifiable, Sendable {
+enum MenuBarDisplayMode: String, CaseIterable, Identifiable, Sendable {
     case both = "both"
     case fiveHourRemaining = "five_hour_remaining"
     case weekRemaining = "week_remaining"
@@ -43,13 +43,13 @@ enum StatusBarDisplayMode: String, CaseIterable, Identifiable, Sendable {
         case .weekRemaining:
             "Weekly limit"
         case .both:
-            "Both limits"
+            "Both usage limits"
         case .credits:
             "Credits remaining"
         }
     }
 
-    var statusBarTitle: String {
+    var menuBarTitle: String {
         switch self {
         case .fiveHourRemaining:
             "5 hour"
@@ -98,9 +98,9 @@ enum UsageWindowKind: String, Sendable {
     nonisolated var sectionTitle: String {
         switch self {
         case .fiveHour:
-            "5 hour limit"
+            "5 hour usage limit"
         case .weekly:
-            "Weekly limit"
+            "Weekly usage limit"
         }
     }
 

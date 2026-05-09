@@ -25,8 +25,35 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Determine whether PR should create a build
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          needs_build=false
+          git fetch --no-tags --depth=1 origin "${BASE_SHA}"
+          git diff --name-only "${BASE_SHA}" HEAD > changed-files.txt
+
+          echo "Changed files:"
+          cat changed-files.txt
+
+          while IFS= read -r path; do
+            case "${path}" in
+              CodexMeter/*|CodexMeterTests/*|CodexMeterUITests/*|CodexMeter.xcodeproj/*|AppIcon.icon/*)
+                needs_build=true
+                break
+                ;;
+            esac
+          done < changed-files.txt
+
+          echo "needs_build=${needs_build}" >> "${GITHUB_OUTPUT}"
+          echo "Needs build: ${needs_build}"
+
       - name: Read app version
         id: version
+        if: steps.changes.outputs.needs_build == 'true'
         run: |
           set -euo pipefail
 
@@ -47,14 +74,19 @@ jobs:
           echo "CodexMeter version: ${version}"
           echo "Expected tag: ${tag}"
 
-      - name: Fail if version tag already exists
+      - name: Skip version check for non-build PR
+        if: steps.changes.outputs.needs_build != 'true'
+        run: echo "This PR does not change build inputs, so it can merge without creating a release build."
+
+      - name: Fail if build version tag already exists
+        if: steps.changes.outputs.needs_build == 'true'
         run: |
           set -euo pipefail
 
           git fetch --tags --force
 
           if git rev-parse --verify --quiet "refs/tags/${{ steps.version.outputs.tag }}"; then
-            echo "Tag ${{ steps.version.outputs.tag }} already exists. Bump MARKETING_VERSION before merging to main." >&2
+            echo "Tag ${{ steps.version.outputs.tag }} already exists, and this PR changes build inputs. Bump MARKETING_VERSION before merging to main." >&2
             exit 1
           fi
 
@@ -73,8 +105,38 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Determine whether push should create a build
+        id: changes
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          needs_build=false
+          git diff --name-only "${BEFORE_SHA}" HEAD > changed-files.txt
+
+          echo "Changed files:"
+          cat changed-files.txt
+
+          while IFS= read -r path; do
+            case "${path}" in
+              CodexMeter/*|CodexMeterTests/*|CodexMeterUITests/*|CodexMeter.xcodeproj/*|AppIcon.icon/*)
+                needs_build=true
+                break
+                ;;
+            esac
+          done < changed-files.txt
+
+          echo "needs_build=${needs_build}" >> "${GITHUB_OUTPUT}"
+          echo "Needs build: ${needs_build}"
+
+      - name: Skip release for non-build push
+        if: steps.changes.outputs.needs_build != 'true'
+        run: echo "This push does not change build inputs, so no release build will be created."
+
       - name: Read app version
         id: version
+        if: steps.changes.outputs.needs_build == 'true'
         run: |
           set -euo pipefail
 
@@ -96,6 +158,7 @@ jobs:
           echo "Expected tag: ${tag}"
 
       - name: Create and push tag
+        if: steps.changes.outputs.needs_build == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -105,8 +168,8 @@ jobs:
 
           tag="${{ steps.version.outputs.tag }}"
           if git rev-parse --verify --quiet "refs/tags/${tag}"; then
-            echo "Tag ${tag} already exists. Bump MARKETING_VERSION before pushing to main." >&2
-            exit 1
+            echo "Tag ${tag} already exists. Skipping release build."
+            exit 0
           fi
 
           git config user.name "github-actions[bot]"

@@ -168,9 +168,9 @@ enum UsageFormatting {
         }
     }
 
-    static func statusBarLabel(
+    static func menuBarLabel(
         snapshot: UsageSnapshot?,
-        mode: StatusBarDisplayMode,
+        mode: MenuBarDisplayMode,
         state: UsageLoadState
     ) -> String {
         guard let snapshot else {
