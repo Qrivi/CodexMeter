@@ -23,7 +23,7 @@ struct CodexMeterApp: App {
         MenuBarExtra {
             UsageMenuView(viewModel: viewModel)
         } label: {
-            Image(nsImage: MenuBarLabelImage.make(title: viewModel.menuBarTitle, value: viewModel.menuBarText))
+            Image(nsImage: MenuBarLabelImage.make(title: viewModel.menuBarTitle, segments: viewModel.menuBarTextSegments))
         }
         .menuBarExtraStyle(.menu)
     }
@@ -34,10 +34,12 @@ private enum MenuBarLabelImage {
     private static let labelFont = NSFont.systemFont(ofSize: 7, weight: .regular)
     private static let valueFont = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
 
-    static func make(title: String, value: String) -> NSImage {
+    static func make(title: String, segments: [MenuBarLabelSegment]) -> NSImage {
         let titleSize = title.size(withAttributes: [.font: labelFont])
-        let valueSize = value.size(withAttributes: [.font: valueFont])
-        let width = max(titleSize.width, valueSize.width)
+        let valueWidth = segments.reduce(0) { width, segment in
+            width + segment.text.size(withAttributes: [.font: valueFont]).width
+        }
+        let width = max(titleSize.width, valueWidth)
         let image = NSImage(size: NSSize(width: width, height: height))
 
         image.lockFocus()
@@ -53,15 +55,32 @@ private enum MenuBarLabelImage {
                 .foregroundColor: NSColor.labelColor
             ]
         )
-        value.draw(
-            at: NSPoint(x: 0, y: 0),
-            withAttributes: [
-                .font: valueFont,
-                .foregroundColor: NSColor.textColor
-            ]
-        )
+        var x: CGFloat = 0
+        for segment in segments {
+            segment.text.draw(
+                at: NSPoint(x: x, y: 0),
+                withAttributes: [
+                    .font: valueFont,
+                    .foregroundColor: color(for: segment.tone)
+                ]
+            )
+            x += segment.text.size(withAttributes: [.font: valueFont]).width
+        }
 
         image.isTemplate = false
         return image
+    }
+
+    private static func color(for tone: MenuBarTextTone) -> NSColor {
+        switch tone {
+        case .neutral:
+            return .textColor
+        case .good:
+            return .systemGreen
+        case .warning:
+            return .systemYellow
+        case .critical:
+            return .systemRed
+        }
     }
 }

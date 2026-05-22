@@ -173,19 +173,52 @@ enum UsageFormatting {
         mode: MenuBarDisplayMode,
         state: UsageLoadState
     ) -> String {
+        menuBarLabelSegments(snapshot: snapshot, mode: mode, colorMode: .monochrome, state: state)
+            .map(\.text)
+            .joined()
+    }
+
+    static func menuBarLabelSegments(
+        snapshot: UsageSnapshot?,
+        mode: MenuBarDisplayMode,
+        colorMode: MenuBarColorMode,
+        state: UsageLoadState
+    ) -> [MenuBarLabelSegment] {
         guard let snapshot else {
-            return fallbackLabel(for: state)
+            return [MenuBarLabelSegment(text: fallbackLabel(for: state), tone: .neutral)]
         }
 
         switch mode {
         case .fiveHourRemaining:
-            return percentLabel(for: snapshot.fiveHourSection.remainingPercent)
+            return [percentSegment(for: snapshot.fiveHourSection, colorMode: colorMode)]
         case .weekRemaining:
-            return percentLabel(for: snapshot.weeklySection.remainingPercent)
+            return [percentSegment(for: snapshot.weeklySection, colorMode: colorMode)]
         case .both:
-            return "\(percentLabel(for: snapshot.fiveHourSection.remainingPercent))/\(percentLabel(for: snapshot.weeklySection.remainingPercent))"
+            return [
+                percentSegment(for: snapshot.fiveHourSection, colorMode: colorMode),
+                MenuBarLabelSegment(text: "/", tone: .neutral),
+                percentSegment(for: snapshot.weeklySection, colorMode: colorMode)
+            ]
         case .credits:
-            return creditsStatusLabel(from: snapshot.creditsText)
+            return [MenuBarLabelSegment(text: creditsStatusLabel(from: snapshot.creditsText), tone: .neutral)]
+        }
+    }
+
+    static func menuBarTone(
+        for section: UsageSectionViewData,
+        colorMode: MenuBarColorMode
+    ) -> MenuBarTextTone {
+        switch colorMode {
+        case .monochrome:
+            return .neutral
+        case .colorful:
+            return menuBarTone(for: section.level)
+        case .colorfulWhenLow:
+            guard let remainingPercent = section.remainingPercent, remainingPercent <= NotificationThreshold.twenty.rawValue else {
+                return .neutral
+            }
+
+            return .critical
         }
     }
 
@@ -210,6 +243,29 @@ enum UsageFormatting {
         }
 
         return "\(remainingPercent)%"
+    }
+
+    private static func percentSegment(
+        for section: UsageSectionViewData,
+        colorMode: MenuBarColorMode
+    ) -> MenuBarLabelSegment {
+        MenuBarLabelSegment(
+            text: percentLabel(for: section.remainingPercent),
+            tone: menuBarTone(for: section, colorMode: colorMode)
+        )
+    }
+
+    private static func menuBarTone(for level: UsageLevel) -> MenuBarTextTone {
+        switch level {
+        case .good:
+            return .good
+        case .warning:
+            return .warning
+        case .critical:
+            return .critical
+        case .neutral:
+            return .neutral
+        }
     }
 
     private static func creditsStatusLabel(from creditsText: String) -> String {

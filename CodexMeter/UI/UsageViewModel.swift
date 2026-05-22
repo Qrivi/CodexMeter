@@ -8,6 +8,7 @@ final class UsageViewModel: ObservableObject {
     @Published private(set) var loadState: UsageLoadState = .idle
     @Published private(set) var pollingInterval: PollingInterval
     @Published private(set) var menuBarDisplayMode: MenuBarDisplayMode
+    @Published private(set) var menuBarColorMode: MenuBarColorMode
     @Published private(set) var limitNotificationThreshold: NotificationThreshold?
     @Published private(set) var resetNotificationsEnabled: Bool
 
@@ -41,6 +42,7 @@ final class UsageViewModel: ObservableObject {
         self.now = now
         self.pollingInterval = preferencesStore.pollingInterval
         self.menuBarDisplayMode = preferencesStore.menuBarDisplayMode
+        self.menuBarColorMode = preferencesStore.menuBarColorMode
         self.limitNotificationThreshold = preferencesStore.limitNotificationThreshold
         self.resetNotificationsEnabled = preferencesStore.resetNotificationsEnabled
     }
@@ -53,6 +55,15 @@ final class UsageViewModel: ObservableObject {
 
     var menuBarText: String {
         UsageFormatting.menuBarLabel(snapshot: snapshot, mode: menuBarDisplayMode, state: loadState)
+    }
+
+    var menuBarTextSegments: [MenuBarLabelSegment] {
+        UsageFormatting.menuBarLabelSegments(
+            snapshot: snapshot,
+            mode: menuBarDisplayMode,
+            colorMode: menuBarColorMode,
+            state: loadState
+        )
     }
 
     var menuBarTitle: String {
@@ -108,6 +119,11 @@ final class UsageViewModel: ObservableObject {
     func selectMenuBarDisplayMode(_ mode: MenuBarDisplayMode) {
         menuBarDisplayMode = mode
         preferencesStore.menuBarDisplayMode = mode
+    }
+
+    func selectMenuBarColorMode(_ mode: MenuBarColorMode) {
+        menuBarColorMode = mode
+        preferencesStore.menuBarColorMode = mode
     }
 
     func selectNotificationThreshold(_ threshold: NotificationThreshold?) {

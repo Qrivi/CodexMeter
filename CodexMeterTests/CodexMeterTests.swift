@@ -95,6 +95,63 @@ struct CodexMeterTests {
     }
 
     @Test
+    func formattingBuildsMenuBarSegmentsWithColorMode() {
+        let snapshot = makeSnapshot(fiveHourRemaining: 64, weeklyRemaining: 18)
+
+        let colorfulSegments = UsageFormatting.menuBarLabelSegments(
+            snapshot: snapshot,
+            mode: .both,
+            colorMode: .colorful,
+            state: .loaded
+        )
+
+        #expect(colorfulSegments == [
+            MenuBarLabelSegment(text: "64%", tone: .good),
+            MenuBarLabelSegment(text: "/", tone: .neutral),
+            MenuBarLabelSegment(text: "18%", tone: .critical)
+        ])
+    }
+
+    @Test
+    func formattingOnlyColorsMenuBarSegmentWhenLowAtTwentyPercent() {
+        let snapshot = makeSnapshot(fiveHourRemaining: 21, weeklyRemaining: 20)
+
+        let segments = UsageFormatting.menuBarLabelSegments(
+            snapshot: snapshot,
+            mode: .both,
+            colorMode: .colorfulWhenLow,
+            state: .loaded
+        )
+
+        #expect(segments == [
+            MenuBarLabelSegment(text: "21%", tone: .neutral),
+            MenuBarLabelSegment(text: "/", tone: .neutral),
+            MenuBarLabelSegment(text: "20%", tone: .critical)
+        ])
+    }
+
+    @Test
+    func formattingKeepsCreditsAndFallbackMenuBarSegmentsNeutral() {
+        let snapshot = makeSnapshot()
+
+        let creditsSegments = UsageFormatting.menuBarLabelSegments(
+            snapshot: snapshot,
+            mode: .credits,
+            colorMode: .colorful,
+            state: .loaded
+        )
+        let fallbackSegments = UsageFormatting.menuBarLabelSegments(
+            snapshot: nil,
+            mode: .fiveHourRemaining,
+            colorMode: .colorful,
+            state: .loading
+        )
+
+        #expect(creditsSegments == [MenuBarLabelSegment(text: "12 cr", tone: .neutral)])
+        #expect(fallbackSegments == [MenuBarLabelSegment(text: "…", tone: .neutral)])
+    }
+
+    @Test
     func preferencesProvideExpectedDefaults() {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
@@ -102,6 +159,7 @@ struct CodexMeterTests {
 
         #expect(store.pollingInterval == .minutes5)
         #expect(store.menuBarDisplayMode == .both)
+        #expect(store.menuBarColorMode == .monochrome)
         #expect(store.limitNotificationThreshold == nil)
         #expect(store.resetNotificationsEnabled == false)
     }
@@ -114,6 +172,7 @@ struct CodexMeterTests {
         var store = PreferencesStore(userDefaults: defaults)
         store.pollingInterval = .minutes10
         store.menuBarDisplayMode = .both
+        store.menuBarColorMode = .colorfulWhenLow
         store.limitNotificationThreshold = .ten
         store.resetNotificationsEnabled = true
 
@@ -121,6 +180,7 @@ struct CodexMeterTests {
 
         #expect(store.pollingInterval == .minutes10)
         #expect(store.menuBarDisplayMode == .both)
+        #expect(store.menuBarColorMode == .colorfulWhenLow)
         #expect(store.limitNotificationThreshold == .ten)
         #expect(store.resetNotificationsEnabled)
     }
@@ -516,6 +576,30 @@ struct CodexMeterTests {
 
         #expect(viewModel.menuBarTitle == "Credits")
         #expect(viewModel.menuBarText == "12 cr")
+    }
+
+    @MainActor
+    @Test
+    func viewModelPersistsMenuBarColorMode() async throws {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        let store = PreferencesStore(userDefaults: defaults)
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(makeSnapshot(fiveHourRemaining: 18))]),
+            preferencesStore: store
+        )
+
+        viewModel.refreshNow()
+        try await waitUntil { viewModel.loadState == .loaded }
+        viewModel.selectMenuBarColorMode(.colorfulWhenLow)
+
+        #expect(viewModel.menuBarColorMode == .colorfulWhenLow)
+        #expect(store.menuBarColorMode == .colorfulWhenLow)
+        #expect(viewModel.menuBarTextSegments == [
+            MenuBarLabelSegment(text: "18%", tone: .critical),
+            MenuBarLabelSegment(text: "/", tone: .neutral),
+            MenuBarLabelSegment(text: "73%", tone: .neutral)
+        ])
     }
 
     @MainActor

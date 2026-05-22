@@ -63,6 +63,25 @@ enum MenuBarDisplayMode: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+enum MenuBarColorMode: String, CaseIterable, Identifiable, Sendable {
+    case monochrome = "monochrome"
+    case colorful = "colorful"
+    case colorfulWhenLow = "colorful_when_low"
+
+    var id: String { rawValue }
+
+    var menuTitle: String {
+        switch self {
+        case .monochrome:
+            "Monochrome"
+        case .colorful:
+            "Colorful"
+        case .colorfulWhenLow:
+            "Colorful when low"
+        }
+    }
+}
+
 enum NotificationThreshold: Int, CaseIterable, Identifiable, Sendable {
     case twenty = 20
     case fifteen = 15
@@ -89,6 +108,18 @@ enum UsageLevel: String, Equatable, Sendable {
     case warning
     case critical
     case neutral
+}
+
+enum MenuBarTextTone: Equatable, Sendable {
+    case neutral
+    case good
+    case warning
+    case critical
+}
+
+struct MenuBarLabelSegment: Equatable, Sendable {
+    let text: String
+    let tone: MenuBarTextTone
 }
 
 enum UsageWindowKind: String, Sendable {

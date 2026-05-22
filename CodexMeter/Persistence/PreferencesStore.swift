@@ -4,6 +4,7 @@ final class PreferencesStore {
     private enum Default {
         static let pollingInterval: PollingInterval = .minutes5
         static let menuBarDisplayMode: MenuBarDisplayMode = .both
+        static let menuBarColorMode: MenuBarColorMode = .monochrome
         static let notificationThreshold: NotificationThreshold? = nil
         static let resetNotificationsEnabled = false
     }
@@ -12,6 +13,7 @@ final class PreferencesStore {
         static let pollingInterval = "pollingInterval"
         static let menuBarDisplayMode = "menuBarDisplayMode"
         static let legacyMenuBarDisplayMode = "statusBarDisplayMode"
+        static let menuBarColorMode = "menuBarColorMode"
         static let notificationThreshold = "notificationThreshold"
         static let resetNotificationsEnabled = "resetNotificationsEnabled"
     }
@@ -48,6 +50,20 @@ final class PreferencesStore {
         }
         set {
             userDefaults.set(newValue.rawValue, forKey: Key.menuBarDisplayMode)
+        }
+    }
+
+    var menuBarColorMode: MenuBarColorMode {
+        get {
+            guard let rawValue = userDefaults.string(forKey: Key.menuBarColorMode),
+                  let colorMode = MenuBarColorMode(rawValue: rawValue) else {
+                return Default.menuBarColorMode
+            }
+
+            return colorMode
+        }
+        set {
+            userDefaults.set(newValue.rawValue, forKey: Key.menuBarColorMode)
         }
     }
 

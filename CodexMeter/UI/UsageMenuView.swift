@@ -101,11 +101,24 @@ struct UsageMenuView: View {
 
     private var menuBarMenu: some View {
         Menu("Show in Menu Bar") {
+            Text("Usage Data")
+
             ForEach(MenuBarDisplayMode.allCases) { mode in
                 selectionToggle(
                     mode.menuTitle,
                     isSelected: viewModel.menuBarDisplayMode == mode,
                     select: { viewModel.selectMenuBarDisplayMode(mode) }
+                )
+            }
+
+            Divider()
+            Text("Color")
+
+            ForEach(MenuBarColorMode.allCases) { mode in
+                selectionToggle(
+                    mode.menuTitle,
+                    isSelected: viewModel.menuBarColorMode == mode,
+                    select: { viewModel.selectMenuBarColorMode(mode) }
                 )
             }
         }
