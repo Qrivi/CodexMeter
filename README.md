@@ -33,13 +33,3 @@ From the command line, when Xcode is selected as the active developer directory:
 ```sh
 xcodebuild -project CodexMeter.xcodeproj -scheme CodexMeter test
 ```
-
-## Preferences
-
-The app stores local preferences in `UserDefaults`, including:
-
-- polling interval
-- menu bar display mode
-- notification threshold
-
-New installs default to showing both usage limits in the menu bar.
