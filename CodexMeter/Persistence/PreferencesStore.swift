@@ -4,14 +4,18 @@ final class PreferencesStore {
     private enum Default {
         static let pollingInterval: PollingInterval = .minutes5
         static let menuBarDisplayMode: MenuBarDisplayMode = .both
+        static let menuBarColorMode: MenuBarColorMode = .monochrome
         static let notificationThreshold: NotificationThreshold? = nil
+        static let resetNotificationsEnabled = false
     }
 
     private enum Key {
         static let pollingInterval = "pollingInterval"
         static let menuBarDisplayMode = "menuBarDisplayMode"
         static let legacyMenuBarDisplayMode = "statusBarDisplayMode"
+        static let menuBarColorMode = "menuBarColorMode"
         static let notificationThreshold = "notificationThreshold"
+        static let resetNotificationsEnabled = "resetNotificationsEnabled"
     }
 
     private let userDefaults: UserDefaults
@@ -49,7 +53,21 @@ final class PreferencesStore {
         }
     }
 
-    var notificationThreshold: NotificationThreshold? {
+    var menuBarColorMode: MenuBarColorMode {
+        get {
+            guard let rawValue = userDefaults.string(forKey: Key.menuBarColorMode),
+                  let colorMode = MenuBarColorMode(rawValue: rawValue) else {
+                return Default.menuBarColorMode
+            }
+
+            return colorMode
+        }
+        set {
+            userDefaults.set(newValue.rawValue, forKey: Key.menuBarColorMode)
+        }
+    }
+
+    var limitNotificationThreshold: NotificationThreshold? {
         get {
             guard let value = userDefaults.object(forKey: Key.notificationThreshold) as? Int else {
                 return Default.notificationThreshold
@@ -63,6 +81,19 @@ final class PreferencesStore {
             } else {
                 userDefaults.removeObject(forKey: Key.notificationThreshold)
             }
+        }
+    }
+
+    var resetNotificationsEnabled: Bool {
+        get {
+            guard userDefaults.object(forKey: Key.resetNotificationsEnabled) != nil else {
+                return Default.resetNotificationsEnabled
+            }
+
+            return userDefaults.bool(forKey: Key.resetNotificationsEnabled)
+        }
+        set {
+            userDefaults.set(newValue, forKey: Key.resetNotificationsEnabled)
         }
     }
 }

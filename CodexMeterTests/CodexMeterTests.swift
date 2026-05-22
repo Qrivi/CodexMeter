@@ -41,6 +41,36 @@ struct CodexMeterTests {
     }
 
     @Test
+    func formattingBuildsLastUpdatedTextWithTimeWhenUpdatedToday() {
+        let now = Date(timeIntervalSince1970: 1_778_054_820) // 2026-05-05 10:07 UTC
+        let lastUpdated = Date(timeIntervalSince1970: 1_778_054_340) // 2026-05-05 09:59 UTC
+
+        let text = UsageFormatting.lastUpdatedText(
+            from: lastUpdated,
+            now: now,
+            locale: Locale(identifier: "en_US_POSIX"),
+            timeZone: TimeZone(secondsFromGMT: 0)!
+        )
+
+        #expect(text == "9:59 AM")
+    }
+
+    @Test
+    func formattingBuildsLastUpdatedTextWithDateWhenUpdatedAnotherDay() {
+        let now = Date(timeIntervalSince1970: 1_778_141_800) // 2026-05-06 10:30 UTC
+        let lastUpdated = Date(timeIntervalSince1970: 1_778_054_820) // 2026-05-05 10:07 UTC
+
+        let text = UsageFormatting.lastUpdatedText(
+            from: lastUpdated,
+            now: now,
+            locale: Locale(identifier: "en_US_POSIX"),
+            timeZone: TimeZone(secondsFromGMT: 0)!
+        )
+
+        #expect(text == "May 5, 2026 10:07 AM")
+    }
+
+    @Test
     func formattingFallsBackToResetAfterSeconds() {
         let now = Date(timeIntervalSince1970: 1_778_054_820)
         let window = UsageWindow(
@@ -65,6 +95,76 @@ struct CodexMeterTests {
     }
 
     @Test
+    func formattingBuildsMenuBarSegmentsWithColorMode() {
+        let snapshot = makeSnapshot(fiveHourRemaining: 64, weeklyRemaining: 18)
+
+        let colorfulSegments = UsageFormatting.menuBarLabelSegments(
+            snapshot: snapshot,
+            mode: .both,
+            colorMode: .colorful,
+            state: .loaded
+        )
+
+        #expect(colorfulSegments == [
+            MenuBarLabelSegment(text: "64%", tone: .good),
+            MenuBarLabelSegment(text: "/", tone: .neutral),
+            MenuBarLabelSegment(text: "18%", tone: .critical)
+        ])
+    }
+
+    @Test
+    func formattingOnlyColorsMenuBarSegmentWhenLowAtTwentyPercent() {
+        let snapshot = makeSnapshot(fiveHourRemaining: 21, weeklyRemaining: 20)
+
+        let segments = UsageFormatting.menuBarLabelSegments(
+            snapshot: snapshot,
+            mode: .both,
+            colorMode: .colorfulWhenLow,
+            state: .loaded
+        )
+
+        #expect(segments == [
+            MenuBarLabelSegment(text: "21%", tone: .neutral),
+            MenuBarLabelSegment(text: "/", tone: .neutral),
+            MenuBarLabelSegment(text: "20%", tone: .critical)
+        ])
+    }
+
+    @Test
+    func formattingKeepsCreditsAndFallbackMenuBarSegmentsNeutral() {
+        let snapshot = makeSnapshot()
+
+        let creditsSegments = UsageFormatting.menuBarLabelSegments(
+            snapshot: snapshot,
+            mode: .credits,
+            colorMode: .colorful,
+            state: .loaded
+        )
+        let fallbackSegments = UsageFormatting.menuBarLabelSegments(
+            snapshot: nil,
+            mode: .fiveHourRemaining,
+            colorMode: .colorful,
+            state: .loading
+        )
+
+        #expect(creditsSegments == [MenuBarLabelSegment(text: "12 cr", tone: .neutral)])
+        #expect(fallbackSegments == [MenuBarLabelSegment(text: "…", tone: .neutral)])
+    }
+
+    @Test
+    func formattingUsesCompactErrorMenuBarSegmentsWhenSnapshotHasFailureMessage() {
+        let warningSnapshot = makeSnapshot().withMessages(warningMessage: "Offline")
+
+        #expect(UsageFormatting.menuBarLabelSegments(
+            snapshot: warningSnapshot,
+            mode: .both,
+            colorMode: .colorful,
+            state: .loaded
+        ) == [MenuBarLabelSegment(text: "Error", tone: .critical)])
+        #expect(UsageFormatting.menuBarLabel(snapshot: nil, mode: .both, state: .failed(message: "Offline")) == "Error")
+    }
+
+    @Test
     func preferencesProvideExpectedDefaults() {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
@@ -72,7 +172,9 @@ struct CodexMeterTests {
 
         #expect(store.pollingInterval == .minutes5)
         #expect(store.menuBarDisplayMode == .both)
-        #expect(store.notificationThreshold == nil)
+        #expect(store.menuBarColorMode == .monochrome)
+        #expect(store.limitNotificationThreshold == nil)
+        #expect(store.resetNotificationsEnabled == false)
     }
 
     @Test
@@ -83,13 +185,17 @@ struct CodexMeterTests {
         var store = PreferencesStore(userDefaults: defaults)
         store.pollingInterval = .minutes10
         store.menuBarDisplayMode = .both
-        store.notificationThreshold = .ten
+        store.menuBarColorMode = .colorfulWhenLow
+        store.limitNotificationThreshold = .ten
+        store.resetNotificationsEnabled = true
 
         store = PreferencesStore(userDefaults: defaults)
 
         #expect(store.pollingInterval == .minutes10)
         #expect(store.menuBarDisplayMode == .both)
-        #expect(store.notificationThreshold == .ten)
+        #expect(store.menuBarColorMode == .colorfulWhenLow)
+        #expect(store.limitNotificationThreshold == .ten)
+        #expect(store.resetNotificationsEnabled)
     }
 
     @Test
@@ -227,14 +333,15 @@ struct CodexMeterTests {
             authorizationRequester: { true },
             authorizationStatusProvider: { .authorized },
             requestDeliverer: { request in
-                await tracker.record(identifier: request.identifier)
+                await tracker.record(request: request)
             }
         )
 
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 25, weeklyRemaining: 50), threshold: .twenty)
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 20, weeklyRemaining: 50), threshold: .twenty)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 25, weeklyRemaining: 50), threshold: .twenty, resetNotificationsEnabled: false)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 20, weeklyRemaining: 50), threshold: .twenty, resetNotificationsEnabled: false)
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-20"])
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-threshold-20"])
+        #expect(await tracker.bodies == ["5 hour usage limit reached 20% remaining. Resets 2:35 PM (4h 28m)"])
     }
 
     @Test
@@ -244,15 +351,15 @@ struct CodexMeterTests {
             authorizationRequester: { true },
             authorizationStatusProvider: { .authorized },
             requestDeliverer: { request in
-                await tracker.record(identifier: request.identifier)
+                await tracker.record(request: request)
             }
         )
 
         let snapshot = makeSnapshot(fiveHourRemaining: 15, weeklyRemaining: 50)
-        await service.evaluateNotifications(for: snapshot, threshold: .twenty)
-        await service.evaluateNotifications(for: snapshot, threshold: .twenty)
+        await service.evaluateNotifications(for: snapshot, threshold: .twenty, resetNotificationsEnabled: false)
+        await service.evaluateNotifications(for: snapshot, threshold: .twenty, resetNotificationsEnabled: false)
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-20"])
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-threshold-20"])
     }
 
     @Test
@@ -262,14 +369,14 @@ struct CodexMeterTests {
             authorizationRequester: { true },
             authorizationStatusProvider: { .authorized },
             requestDeliverer: { request in
-                await tracker.record(identifier: request.identifier)
+                await tracker.record(request: request)
             }
         )
 
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 15, weeklyRemaining: 50, fiveHourReset: Date(timeIntervalSince1970: 100)), threshold: .twenty)
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 15, weeklyRemaining: 50, fiveHourReset: Date(timeIntervalSince1970: 200)), threshold: .twenty)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 15, weeklyRemaining: 50, fiveHourReset: Date(timeIntervalSince1970: 100)), threshold: .twenty, resetNotificationsEnabled: false)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 15, weeklyRemaining: 50, fiveHourReset: Date(timeIntervalSince1970: 200)), threshold: .twenty, resetNotificationsEnabled: false)
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-20", "codexmeter-fiveHour-20"])
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-threshold-20", "codexmeter-fiveHour-threshold-20"])
     }
 
     @Test
@@ -279,13 +386,13 @@ struct CodexMeterTests {
             authorizationRequester: { true },
             authorizationStatusProvider: { .authorized },
             requestDeliverer: { request in
-                await tracker.record(identifier: request.identifier)
+                await tracker.record(request: request)
             }
         )
 
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 10, weeklyRemaining: 10), threshold: .twenty)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 10, weeklyRemaining: 10), threshold: .twenty, resetNotificationsEnabled: false)
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-20", "codexmeter-weekly-20"])
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-threshold-20", "codexmeter-weekly-threshold-20"])
     }
 
     @Test
@@ -295,17 +402,121 @@ struct CodexMeterTests {
             authorizationRequester: { true },
             authorizationStatusProvider: { .authorized },
             requestDeliverer: { request in
-                await tracker.record(identifier: request.identifier)
+                await tracker.record(request: request)
             }
         )
 
         let snapshot = makeSnapshot(fiveHourRemaining: 9, weeklyRemaining: 50)
         await service.updateThreshold(.ten)
-        await service.evaluateNotifications(for: snapshot, threshold: .ten)
+        await service.evaluateNotifications(for: snapshot, threshold: .ten, resetNotificationsEnabled: false)
         await service.updateThreshold(.twenty)
-        await service.evaluateNotifications(for: snapshot, threshold: .twenty)
+        await service.evaluateNotifications(for: snapshot, threshold: .twenty, resetNotificationsEnabled: false)
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-10", "codexmeter-fiveHour-20"])
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-threshold-10", "codexmeter-fiveHour-threshold-20"])
+    }
+
+    @Test
+    func notificationsReconcileThresholdChangesDuringEvaluation() async {
+        let tracker = NotificationTracker()
+        let service = NotificationService(
+            authorizationRequester: { true },
+            authorizationStatusProvider: { .authorized },
+            requestDeliverer: { request in
+                await tracker.record(request: request)
+            }
+        )
+
+        let snapshot = makeSnapshot(fiveHourRemaining: 9, weeklyRemaining: 50)
+        await service.evaluateNotifications(for: snapshot, threshold: .ten, resetNotificationsEnabled: false)
+        await service.evaluateNotifications(for: snapshot, threshold: .twenty, resetNotificationsEnabled: false)
+
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-threshold-10", "codexmeter-fiveHour-threshold-20"])
+    }
+
+    @Test
+    func resetNotificationsFireWhenUsageReturnsToNinetyNinePercent() async {
+        let tracker = NotificationTracker()
+        let service = NotificationService(
+            authorizationRequester: { true },
+            authorizationStatusProvider: { .authorized },
+            requestDeliverer: { request in
+                await tracker.record(request: request)
+            }
+        )
+
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 42, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 99, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
+
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-reset"])
+        #expect(await tracker.bodies == ["5 hour usage limit reset. 99% remaining. Resets 2:35 PM (4h 28m)"])
+    }
+
+    @Test
+    func resetNotificationsFireWhenUsageReturnsToOneHundredPercent() async {
+        let tracker = NotificationTracker()
+        let service = NotificationService(
+            authorizationRequester: { true },
+            authorizationStatusProvider: { .authorized },
+            requestDeliverer: { request in
+                await tracker.record(request: request)
+            }
+        )
+
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 42, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 100, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
+
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-reset"])
+    }
+
+    @Test
+    func resetNotificationsDoNotFireOnFirstObservationAtResetLevel() async {
+        let tracker = NotificationTracker()
+        let service = NotificationService(
+            authorizationRequester: { true },
+            authorizationStatusProvider: { .authorized },
+            requestDeliverer: { request in
+                await tracker.record(request: request)
+            }
+        )
+
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 99, weeklyRemaining: 100), threshold: nil, resetNotificationsEnabled: true)
+
+        #expect(await tracker.identifiers == [])
+    }
+
+    @Test
+    func resetNotificationsTrackFiveHourAndWeeklyWindowsIndependently() async {
+        let tracker = NotificationTracker()
+        let service = NotificationService(
+            authorizationRequester: { true },
+            authorizationStatusProvider: { .authorized },
+            requestDeliverer: { request in
+                await tracker.record(request: request)
+            }
+        )
+
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 42, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 99, weeklyRemaining: 99), threshold: nil, resetNotificationsEnabled: true)
+
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-reset", "codexmeter-weekly-reset"])
+    }
+
+    @Test
+    func resetNotificationsDoNotRepeatWhileStillAtResetLevel() async {
+        let tracker = NotificationTracker()
+        let service = NotificationService(
+            authorizationRequester: { true },
+            authorizationStatusProvider: { .authorized },
+            requestDeliverer: { request in
+                await tracker.record(request: request)
+            }
+        )
+
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 42, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 99, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 100, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
+
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-reset"])
     }
 
     @MainActor
@@ -348,10 +559,32 @@ struct CodexMeterTests {
         viewModel.refreshNow()
         try await waitUntil { viewModel.loadState == .loaded }
         viewModel.refreshNow()
-        try await waitUntil { viewModel.snapshot?.warningMessage == "Update failed" }
+        try await waitUntil { viewModel.snapshot?.warningMessage == "Offline" }
 
         #expect(viewModel.snapshot?.fiveHourSection.remainingPercent == initialSnapshot.fiveHourSection.remainingPercent)
-        #expect(viewModel.snapshot?.warningMessage == "Update failed")
+        #expect(viewModel.snapshot?.warningMessage == "Offline")
+        #expect(viewModel.menuBarText == "Error")
+        #expect(viewModel.menuBarTextSegments == [MenuBarLabelSegment(text: "Error", tone: .critical)])
+    }
+
+    @MainActor
+    @Test
+    func viewModelShowsErrorStatusInMenuBarAfterStaleDataAuthenticationFailure() async throws {
+        let initialSnapshot = makeSnapshot()
+        let viewModel = makeViewModel(service: MockUsageFetcher(results: [
+            .success(initialSnapshot),
+            .failure(UsageServiceError.unauthorized)
+        ]))
+
+        viewModel.refreshNow()
+        try await waitUntil { viewModel.loadState == .loaded }
+        viewModel.refreshNow()
+        try await waitUntil { viewModel.snapshot?.warningMessage == "Auth token unavailable. Open Codex to refresh it." }
+
+        #expect(viewModel.snapshot?.fiveHourSection.remainingPercent == initialSnapshot.fiveHourSection.remainingPercent)
+        #expect(viewModel.snapshot?.warningMessage == "Auth token unavailable. Open Codex to refresh it.")
+        #expect(viewModel.menuBarText == "Error")
+        #expect(viewModel.menuBarTextSegments == [MenuBarLabelSegment(text: "Error", tone: .critical)])
     }
 
     @MainActor
@@ -360,10 +593,10 @@ struct CodexMeterTests {
         let viewModel = makeViewModel(service: MockUsageFetcher(results: [.failure(UsageServiceError.unauthorized)]))
 
         viewModel.refreshNow()
-        try await waitUntil { viewModel.loadState == .authFailure(message: "Auth token unavailable. Open Codex to refresh it.") }
+        try await waitUntil { viewModel.loadState == .failed(message: "Auth token unavailable. Open Codex to refresh it.") }
 
         #expect(viewModel.currentFailureMessage == "Auth token unavailable. Open Codex to refresh it.")
-        #expect(viewModel.loadState == .authFailure(message: "Auth token unavailable. Open Codex to refresh it."))
+        #expect(viewModel.loadState == .failed(message: "Auth token unavailable. Open Codex to refresh it."))
     }
 
     @MainActor
@@ -396,6 +629,50 @@ struct CodexMeterTests {
 
         #expect(viewModel.menuBarTitle == "Credits")
         #expect(viewModel.menuBarText == "12 cr")
+    }
+
+    @MainActor
+    @Test
+    func viewModelPersistsMenuBarColorMode() async throws {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        let store = PreferencesStore(userDefaults: defaults)
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(makeSnapshot(fiveHourRemaining: 18))]),
+            preferencesStore: store
+        )
+
+        viewModel.refreshNow()
+        try await waitUntil { viewModel.loadState == .loaded }
+        viewModel.selectMenuBarColorMode(.colorfulWhenLow)
+
+        #expect(viewModel.menuBarColorMode == .colorfulWhenLow)
+        #expect(store.menuBarColorMode == .colorfulWhenLow)
+        #expect(viewModel.menuBarTextSegments == [
+            MenuBarLabelSegment(text: "18%", tone: .critical),
+            MenuBarLabelSegment(text: "/", tone: .neutral),
+            MenuBarLabelSegment(text: "73%", tone: .neutral)
+        ])
+    }
+
+    @MainActor
+    @Test
+    func viewModelPersistsResetNotificationSettingAndRequestsPermission() async throws {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        let store = PreferencesStore(userDefaults: defaults)
+        let notificationService = MockNotificationService()
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(makeSnapshot())]),
+            preferencesStore: store,
+            notificationService: notificationService
+        )
+
+        viewModel.setResetNotificationsEnabled(true)
+        try await waitUntil { notificationService.authorizationRequestCount == 1 }
+
+        #expect(viewModel.resetNotificationsEnabled)
+        #expect(store.resetNotificationsEnabled)
     }
 
     @Test
@@ -517,10 +794,12 @@ private actor RefreshTracker {
 
 private actor NotificationTracker {
     private(set) var identifiers: [String] = []
+    private(set) var bodies: [String] = []
     private(set) var authorizationRequestCount = 0
 
-    func record(identifier: String) {
-        identifiers.append(identifier)
+    func record(request: UNNotificationRequest) {
+        identifiers.append(request.identifier)
+        bodies.append(request.content.body)
     }
 
     func markAuthorizationRequested() {
@@ -541,10 +820,29 @@ private final class LauncherRecorder: @unchecked Sendable {
     }
 }
 
-private struct MockNotificationService: NotificationScheduling {
-    func requestAuthorizationIfNeeded() async -> Bool { true }
+private final class MockNotificationService: NotificationScheduling, @unchecked Sendable {
+    private let lock = NSLock()
+    private var authorizationRequestCountValue = 0
+
+    var authorizationRequestCount: Int {
+        lock.withLock {
+            authorizationRequestCountValue
+        }
+    }
+
+    func requestAuthorizationIfNeeded() async -> Bool {
+        lock.withLock {
+            authorizationRequestCountValue += 1
+        }
+        return true
+    }
+
     func updateThreshold(_ threshold: NotificationThreshold?) async {}
-    func evaluateNotifications(for snapshot: UsageSnapshot, threshold: NotificationThreshold?) async {}
+    func evaluateNotifications(
+        for snapshot: UsageSnapshot,
+        threshold: NotificationThreshold?,
+        resetNotificationsEnabled: Bool
+    ) async {}
 }
 
 private enum WaitTimeout: Error {
@@ -576,14 +874,15 @@ private struct MockAppLauncher: AppLaunching {
 @MainActor
 private func makeViewModel(
     service: UsageFetching,
-    preferencesStore: PreferencesStore? = nil
+    preferencesStore: PreferencesStore? = nil,
+    notificationService: NotificationScheduling = MockNotificationService()
 ) -> UsageViewModel {
     let store = preferencesStore ?? PreferencesStore(userDefaults: UserDefaults(suiteName: UUID().uuidString)!)
     return UsageViewModel(
         usageService: service,
         preferencesStore: store,
         appLauncher: MockAppLauncher(),
-        notificationService: MockNotificationService(),
+        notificationService: notificationService,
         wakeNotificationCenter: NotificationCenter()
     )
 }
@@ -615,7 +914,6 @@ private func makeSnapshot(
         ),
         creditsText: "12",
         lastUpdated: Date(timeIntervalSince1970: 1_778_054_820),
-        warningMessage: nil,
-        authGuidanceMessage: nil
+        warningMessage: nil
     )
 }

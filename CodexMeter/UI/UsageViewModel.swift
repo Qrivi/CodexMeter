@@ -8,7 +8,9 @@ final class UsageViewModel: ObservableObject {
     @Published private(set) var loadState: UsageLoadState = .idle
     @Published private(set) var pollingInterval: PollingInterval
     @Published private(set) var menuBarDisplayMode: MenuBarDisplayMode
-    @Published private(set) var notificationThreshold: NotificationThreshold?
+    @Published private(set) var menuBarColorMode: MenuBarColorMode
+    @Published private(set) var limitNotificationThreshold: NotificationThreshold?
+    @Published private(set) var resetNotificationsEnabled: Bool
 
     private let usageService: UsageFetching
     private let preferencesStore: PreferencesStore
@@ -40,7 +42,9 @@ final class UsageViewModel: ObservableObject {
         self.now = now
         self.pollingInterval = preferencesStore.pollingInterval
         self.menuBarDisplayMode = preferencesStore.menuBarDisplayMode
-        self.notificationThreshold = preferencesStore.notificationThreshold
+        self.menuBarColorMode = preferencesStore.menuBarColorMode
+        self.limitNotificationThreshold = preferencesStore.limitNotificationThreshold
+        self.resetNotificationsEnabled = preferencesStore.resetNotificationsEnabled
     }
 
     deinit {
@@ -53,6 +57,15 @@ final class UsageViewModel: ObservableObject {
         UsageFormatting.menuBarLabel(snapshot: snapshot, mode: menuBarDisplayMode, state: loadState)
     }
 
+    var menuBarTextSegments: [MenuBarLabelSegment] {
+        UsageFormatting.menuBarLabelSegments(
+            snapshot: snapshot,
+            mode: menuBarDisplayMode,
+            colorMode: menuBarColorMode,
+            state: loadState
+        )
+    }
+
     var menuBarTitle: String {
         menuBarDisplayMode.menuBarTitle
     }
@@ -63,19 +76,11 @@ final class UsageViewModel: ObservableObject {
 
     var currentFailureMessage: String? {
         switch loadState {
-        case let .failed(message), let .authFailure(message):
+        case let .failed(message):
             return message
         default:
             return nil
         }
-    }
-
-    var showsAuthGuidance: Bool {
-        if case .authFailure = loadState {
-            return true
-        }
-
-        return snapshot?.authGuidanceMessage != nil
     }
 
     func start() {
@@ -108,9 +113,14 @@ final class UsageViewModel: ObservableObject {
         preferencesStore.menuBarDisplayMode = mode
     }
 
+    func selectMenuBarColorMode(_ mode: MenuBarColorMode) {
+        menuBarColorMode = mode
+        preferencesStore.menuBarColorMode = mode
+    }
+
     func selectNotificationThreshold(_ threshold: NotificationThreshold?) {
-        notificationThreshold = threshold
-        preferencesStore.notificationThreshold = threshold
+        limitNotificationThreshold = threshold
+        preferencesStore.limitNotificationThreshold = threshold
 
         Task {
             await notificationService.updateThreshold(threshold)
@@ -118,6 +128,19 @@ final class UsageViewModel: ObservableObject {
             if threshold != nil {
                 _ = await notificationService.requestAuthorizationIfNeeded()
             }
+        }
+    }
+
+    func setResetNotificationsEnabled(_ isEnabled: Bool) {
+        resetNotificationsEnabled = isEnabled
+        preferencesStore.resetNotificationsEnabled = isEnabled
+
+        guard isEnabled else {
+            return
+        }
+
+        Task {
+            _ = await notificationService.requestAuthorizationIfNeeded()
         }
     }
 
@@ -160,17 +183,21 @@ final class UsageViewModel: ObservableObject {
             do {
                 let freshSnapshot = try await usageService.fetchUsageSnapshot()
 
-                let threshold: NotificationThreshold? = await MainActor.run { [weak self] in
+                let notificationSettings: (NotificationThreshold?, Bool) = await MainActor.run { [weak self] in
                     guard let self, Task.isCancelled == false else {
-                        return nil
+                        return (nil, false)
                     }
 
                     snapshot = freshSnapshot
                     loadState = .loaded
-                    return notificationThreshold
+                    return (limitNotificationThreshold, resetNotificationsEnabled)
                 }
 
-                await notificationService.evaluateNotifications(for: freshSnapshot, threshold: threshold)
+                await notificationService.evaluateNotifications(
+                    for: freshSnapshot,
+                    threshold: notificationSettings.0,
+                    resetNotificationsEnabled: notificationSettings.1
+                )
             } catch let error as UsageServiceError {
                 await MainActor.run { [weak self] in
                     self?.handleRefreshFailure(error)
@@ -192,18 +219,15 @@ final class UsageViewModel: ObservableObject {
         switch error {
         case .auth, .unauthorized:
             if let snapshot {
-                self.snapshot = snapshot.withMessages(
-                    warningMessage: "Update failed",
-                    authGuidanceMessage: error.userFacingMessage
-                )
+                self.snapshot = snapshot.withMessages(warningMessage: error.userFacingMessage)
                 loadState = .loaded
             } else {
-                loadState = .authFailure(message: error.userFacingMessage)
+                loadState = .failed(message: error.userFacingMessage)
             }
 
         case .network, .invalidResponse, .decoding:
             if let snapshot {
-                self.snapshot = snapshot.withMessages(warningMessage: "Update failed", authGuidanceMessage: nil)
+                self.snapshot = snapshot.withMessages(warningMessage: error.userFacingMessage)
                 loadState = .loaded
             } else {
                 loadState = .failed(message: error.userFacingMessage)
@@ -213,10 +237,7 @@ final class UsageViewModel: ObservableObject {
 
     private func applyNonFatalWarning(_ message: String) {
         if let snapshot {
-            self.snapshot = snapshot.withMessages(
-                warningMessage: message,
-                authGuidanceMessage: snapshot.authGuidanceMessage
-            )
+            self.snapshot = snapshot.withMessages(warningMessage: message)
         } else {
             loadState = .failed(message: message)
         }

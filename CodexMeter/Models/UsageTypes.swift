@@ -63,6 +63,25 @@ enum MenuBarDisplayMode: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+enum MenuBarColorMode: String, CaseIterable, Identifiable, Sendable {
+    case monochrome = "monochrome"
+    case colorful = "colorful"
+    case colorfulWhenLow = "colorful_when_low"
+
+    var id: String { rawValue }
+
+    var menuTitle: String {
+        switch self {
+        case .monochrome:
+            "Monochrome"
+        case .colorful:
+            "Colorful"
+        case .colorfulWhenLow:
+            "Colorful when low"
+        }
+    }
+}
+
 enum NotificationThreshold: Int, CaseIterable, Identifiable, Sendable {
     case twenty = 20
     case fifteen = 15
@@ -81,7 +100,6 @@ enum UsageLoadState: Equatable, Sendable {
     case loading
     case loaded
     case failed(message: String)
-    case authFailure(message: String)
 }
 
 enum UsageLevel: String, Equatable, Sendable {
@@ -89,6 +107,18 @@ enum UsageLevel: String, Equatable, Sendable {
     case warning
     case critical
     case neutral
+}
+
+enum MenuBarTextTone: Equatable, Sendable {
+    case neutral
+    case good
+    case warning
+    case critical
+}
+
+struct MenuBarLabelSegment: Equatable, Sendable {
+    let text: String
+    let tone: MenuBarTextTone
 }
 
 enum UsageWindowKind: String, Sendable {
@@ -104,12 +134,21 @@ enum UsageWindowKind: String, Sendable {
         }
     }
 
-    nonisolated var notificationTitle: String {
+    nonisolated var limitNotificationTitle: String {
         switch self {
         case .fiveHour:
             "Codex 5 hour usage limit is low"
         case .weekly:
             "Codex weekly usage limit is low"
+        }
+    }
+
+    nonisolated var resetNotificationTitle: String {
+        switch self {
+        case .fiveHour:
+            "Codex 5 hour usage limit reset"
+        case .weekly:
+            "Codex weekly usage limit reset"
         }
     }
 }
@@ -142,19 +181,14 @@ struct UsageSnapshot: Equatable, Sendable {
     let creditsText: String
     let lastUpdated: Date
     let warningMessage: String?
-    let authGuidanceMessage: String?
 
-    func withMessages(
-        warningMessage: String? = nil,
-        authGuidanceMessage: String? = nil
-    ) -> UsageSnapshot {
+    func withMessages(warningMessage: String? = nil) -> UsageSnapshot {
         UsageSnapshot(
             fiveHourSection: fiveHourSection,
             weeklySection: weeklySection,
             creditsText: creditsText,
             lastUpdated: lastUpdated,
-            warningMessage: warningMessage,
-            authGuidanceMessage: authGuidanceMessage
+            warningMessage: warningMessage
         )
     }
 }
@@ -180,7 +214,11 @@ protocol AppLaunching: Sendable {
 protocol NotificationScheduling: Sendable {
     func requestAuthorizationIfNeeded() async -> Bool
     func updateThreshold(_ threshold: NotificationThreshold?) async
-    func evaluateNotifications(for snapshot: UsageSnapshot, threshold: NotificationThreshold?) async
+    func evaluateNotifications(
+        for snapshot: UsageSnapshot,
+        threshold: NotificationThreshold?,
+        resetNotificationsEnabled: Bool
+    ) async
 }
 
 enum AuthTokenProviderError: LocalizedError, Equatable, Sendable {

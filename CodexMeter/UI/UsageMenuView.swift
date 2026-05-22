@@ -31,21 +31,15 @@ struct UsageMenuView: View {
         Divider()
 
         if let snapshot = viewModel.snapshot {
-            if let authGuidanceMessage = snapshot.authGuidanceMessage {
-                Text(authGuidanceMessage)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
+            Text("Last updated \(UsageFormatting.lastUpdatedText(from: snapshot.lastUpdated))")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
 
             if let warningMessage = snapshot.warningMessage {
                 Text(warningMessage)
                     .font(.footnote)
                     .foregroundStyle(.red)
             }
-
-            Text("Last updated \(UsageFormatting.lastUpdatedText(from: snapshot.lastUpdated))")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
         }
 
         Button("Refresh Now") {
@@ -101,6 +95,8 @@ struct UsageMenuView: View {
 
     private var menuBarMenu: some View {
         Menu("Show in Menu Bar") {
+            Text("Usage Data")
+
             ForEach(MenuBarDisplayMode.allCases) { mode in
                 selectionToggle(
                     mode.menuTitle,
@@ -108,24 +104,52 @@ struct UsageMenuView: View {
                     select: { viewModel.selectMenuBarDisplayMode(mode) }
                 )
             }
+
+            Divider()
+            Text("Color")
+
+            ForEach(MenuBarColorMode.allCases) { mode in
+                selectionToggle(
+                    mode.menuTitle,
+                    isSelected: viewModel.menuBarColorMode == mode,
+                    select: { viewModel.selectMenuBarColorMode(mode) }
+                )
+            }
         }
     }
 
     private var notificationsMenu: some View {
         Menu("Notifications") {
+            Text("Low Usage")
+
             selectionToggle(
                 "Off",
-                isSelected: viewModel.notificationThreshold == nil,
+                isSelected: viewModel.limitNotificationThreshold == nil,
                 select: { viewModel.selectNotificationThreshold(nil) }
             )
 
             ForEach(NotificationThreshold.allCases) { threshold in
                 selectionToggle(
                     threshold.title,
-                    isSelected: viewModel.notificationThreshold == threshold,
+                    isSelected: viewModel.limitNotificationThreshold == threshold,
                     select: { viewModel.selectNotificationThreshold(threshold) }
                 )
             }
+
+            Divider()
+            Text("Limit Reset")
+
+            selectionToggle(
+                "Off",
+                isSelected: viewModel.resetNotificationsEnabled == false,
+                select: { viewModel.setResetNotificationsEnabled(false) }
+            )
+
+            selectionToggle(
+                "Notify when reset",
+                isSelected: viewModel.resetNotificationsEnabled,
+                select: { viewModel.setResetNotificationsEnabled(true) }
+            )
         }
     }
 
