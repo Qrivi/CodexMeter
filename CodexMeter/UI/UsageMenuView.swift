@@ -113,19 +113,36 @@ struct UsageMenuView: View {
 
     private var notificationsMenu: some View {
         Menu("Notifications") {
+            Text("Low Usage")
+
             selectionToggle(
                 "Off",
-                isSelected: viewModel.notificationThreshold == nil,
+                isSelected: viewModel.limitNotificationThreshold == nil,
                 select: { viewModel.selectNotificationThreshold(nil) }
             )
 
             ForEach(NotificationThreshold.allCases) { threshold in
                 selectionToggle(
                     threshold.title,
-                    isSelected: viewModel.notificationThreshold == threshold,
+                    isSelected: viewModel.limitNotificationThreshold == threshold,
                     select: { viewModel.selectNotificationThreshold(threshold) }
                 )
             }
+
+            Divider()
+            Text("Limit Reset")
+
+            selectionToggle(
+                "Off",
+                isSelected: viewModel.resetNotificationsEnabled == false,
+                select: { viewModel.setResetNotificationsEnabled(false) }
+            )
+
+            selectionToggle(
+                "Notify when reset",
+                isSelected: viewModel.resetNotificationsEnabled,
+                select: { viewModel.setResetNotificationsEnabled(true) }
+            )
         }
     }
 

@@ -104,12 +104,21 @@ enum UsageWindowKind: String, Sendable {
         }
     }
 
-    nonisolated var notificationTitle: String {
+    nonisolated var limitNotificationTitle: String {
         switch self {
         case .fiveHour:
             "Codex 5 hour usage limit is low"
         case .weekly:
             "Codex weekly usage limit is low"
+        }
+    }
+
+    nonisolated var resetNotificationTitle: String {
+        switch self {
+        case .fiveHour:
+            "Codex 5 hour usage limit reset"
+        case .weekly:
+            "Codex weekly usage limit reset"
         }
     }
 }
@@ -180,7 +189,11 @@ protocol AppLaunching: Sendable {
 protocol NotificationScheduling: Sendable {
     func requestAuthorizationIfNeeded() async -> Bool
     func updateThreshold(_ threshold: NotificationThreshold?) async
-    func evaluateNotifications(for snapshot: UsageSnapshot, threshold: NotificationThreshold?) async
+    func evaluateNotifications(
+        for snapshot: UsageSnapshot,
+        threshold: NotificationThreshold?,
+        resetNotificationsEnabled: Bool
+    ) async
 }
 
 enum AuthTokenProviderError: LocalizedError, Equatable, Sendable {

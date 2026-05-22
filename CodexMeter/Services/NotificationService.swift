@@ -2,16 +2,24 @@ import Foundation
 @preconcurrency import UserNotifications
 
 actor NotificationService: NotificationScheduling {
-    private struct NotificationState: Sendable {
+    private struct ThresholdNotificationState: Sendable {
         var resetDate: Date?
         var hasNotified = false
     }
+
+    private struct ResetNotificationState: Sendable {
+        var hasSeenBelowResetLevel = false
+        var hasNotifiedAtResetLevel = false
+    }
+
+    nonisolated private static let resetRemainingPercent = 99
 
     private let authorizationRequester: @Sendable () async -> Bool
     private let authorizationStatusProvider: @Sendable () async -> UNAuthorizationStatus
     private let requestDeliverer: @Sendable (UNNotificationRequest) async -> Void
     private var currentThreshold: NotificationThreshold?
-    private var stateByWindow: [UsageWindowKind: NotificationState] = [:]
+    private var thresholdStateByWindow: [UsageWindowKind: ThresholdNotificationState] = [:]
+    private var resetStateByWindow: [UsageWindowKind: ResetNotificationState] = [:]
 
     init(center: UNUserNotificationCenter = .current()) {
         self.authorizationRequester = {
@@ -58,14 +66,18 @@ actor NotificationService: NotificationScheduling {
 
     func updateThreshold(_ threshold: NotificationThreshold?) async {
         if threshold != currentThreshold {
-            stateByWindow.removeAll()
+            thresholdStateByWindow.removeAll()
         }
 
         currentThreshold = threshold
     }
 
-    func evaluateNotifications(for snapshot: UsageSnapshot, threshold: NotificationThreshold?) async {
-        guard let threshold else {
+    func evaluateNotifications(
+        for snapshot: UsageSnapshot,
+        threshold: NotificationThreshold?,
+        resetNotificationsEnabled: Bool
+    ) async {
+        guard threshold != nil || resetNotificationsEnabled else {
             return
         }
 
@@ -74,47 +86,75 @@ actor NotificationService: NotificationScheduling {
             return
         }
 
-        await evaluate(section: snapshot.fiveHourSection, threshold: threshold)
-        await evaluate(section: snapshot.weeklySection, threshold: threshold)
+        await evaluate(
+            section: snapshot.fiveHourSection,
+            threshold: threshold,
+            resetNotificationsEnabled: resetNotificationsEnabled
+        )
+        await evaluate(
+            section: snapshot.weeklySection,
+            threshold: threshold,
+            resetNotificationsEnabled: resetNotificationsEnabled
+        )
     }
 
-    private func evaluate(section: UsageSectionViewData, threshold: NotificationThreshold) async {
+    private func evaluate(
+        section: UsageSectionViewData,
+        threshold: NotificationThreshold?,
+        resetNotificationsEnabled: Bool
+    ) async {
         guard let remainingPercent = section.remainingPercent else {
             return
         }
 
-        var notificationState = stateByWindow[section.windowKind] ?? NotificationState()
+        if let threshold {
+            await evaluateThresholdNotification(
+                section: section,
+                remainingPercent: remainingPercent,
+                threshold: threshold
+            )
+        }
+
+        if resetNotificationsEnabled {
+            await evaluateResetNotification(section: section, remainingPercent: remainingPercent)
+        }
+    }
+
+    private func evaluateThresholdNotification(
+        section: UsageSectionViewData,
+        remainingPercent: Int,
+        threshold: NotificationThreshold
+    ) async {
+        var notificationState = thresholdStateByWindow[section.windowKind] ?? ThresholdNotificationState()
 
         if notificationState.resetDate != section.resetDate {
-            notificationState = NotificationState(resetDate: section.resetDate, hasNotified: false)
+            notificationState = ThresholdNotificationState(resetDate: section.resetDate, hasNotified: false)
         }
 
         if remainingPercent > threshold.rawValue {
             notificationState.hasNotified = false
             notificationState.resetDate = section.resetDate
-            stateByWindow[section.windowKind] = notificationState
+            thresholdStateByWindow[section.windowKind] = notificationState
             return
         }
 
         guard notificationState.hasNotified == false else {
-            stateByWindow[section.windowKind] = notificationState
+            thresholdStateByWindow[section.windowKind] = notificationState
             return
         }
 
-        let body: String
-        if let resetText = section.resetText {
-            body = "\(remainingPercent)% remaining. \(resetText)"
-        } else {
-            body = "\(remainingPercent)% remaining."
-        }
+        let body = bodyText(
+            prefix: "\(section.title) reached \(threshold.rawValue)% remaining.",
+            resetText: section.resetText
+        )
 
         let content = UNMutableNotificationContent()
-        content.title = section.windowKind.notificationTitle
+        content.title = section.windowKind.limitNotificationTitle
         content.body = body
         content.sound = .default
 
         let request = UNNotificationRequest(
-            identifier: "codexmeter-\(section.windowKind.rawValue)-\(threshold.rawValue)",
+            identifier: "codexmeter-\(section.windowKind.rawValue)-threshold-\(threshold.rawValue)",
             content: content,
             trigger: nil
         )
@@ -122,6 +162,53 @@ actor NotificationService: NotificationScheduling {
         await requestDeliverer(request)
         notificationState.hasNotified = true
         notificationState.resetDate = section.resetDate
-        stateByWindow[section.windowKind] = notificationState
+        thresholdStateByWindow[section.windowKind] = notificationState
+    }
+
+    private func evaluateResetNotification(section: UsageSectionViewData, remainingPercent: Int) async {
+        var notificationState = resetStateByWindow[section.windowKind] ?? ResetNotificationState()
+
+        guard remainingPercent >= Self.resetRemainingPercent else {
+            notificationState.hasSeenBelowResetLevel = true
+            notificationState.hasNotifiedAtResetLevel = false
+            resetStateByWindow[section.windowKind] = notificationState
+            return
+        }
+
+        defer {
+            resetStateByWindow[section.windowKind] = notificationState
+        }
+
+        guard notificationState.hasSeenBelowResetLevel,
+              notificationState.hasNotifiedAtResetLevel == false else {
+            return
+        }
+
+        let body = bodyText(
+            prefix: "\(section.title) reset. \(remainingPercent)% remaining.",
+            resetText: section.resetText
+        )
+
+        let content = UNMutableNotificationContent()
+        content.title = section.windowKind.resetNotificationTitle
+        content.body = body
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "codexmeter-\(section.windowKind.rawValue)-reset",
+            content: content,
+            trigger: nil
+        )
+
+        await requestDeliverer(request)
+        notificationState.hasNotifiedAtResetLevel = true
+    }
+
+    private func bodyText(prefix: String, resetText: String?) -> String {
+        if let resetText {
+            return "\(prefix) \(resetText)"
+        }
+
+        return prefix
     }
 }

@@ -102,7 +102,8 @@ struct CodexMeterTests {
 
         #expect(store.pollingInterval == .minutes5)
         #expect(store.menuBarDisplayMode == .both)
-        #expect(store.notificationThreshold == nil)
+        #expect(store.limitNotificationThreshold == nil)
+        #expect(store.resetNotificationsEnabled == false)
     }
 
     @Test
@@ -113,13 +114,15 @@ struct CodexMeterTests {
         var store = PreferencesStore(userDefaults: defaults)
         store.pollingInterval = .minutes10
         store.menuBarDisplayMode = .both
-        store.notificationThreshold = .ten
+        store.limitNotificationThreshold = .ten
+        store.resetNotificationsEnabled = true
 
         store = PreferencesStore(userDefaults: defaults)
 
         #expect(store.pollingInterval == .minutes10)
         #expect(store.menuBarDisplayMode == .both)
-        #expect(store.notificationThreshold == .ten)
+        #expect(store.limitNotificationThreshold == .ten)
+        #expect(store.resetNotificationsEnabled)
     }
 
     @Test
@@ -257,14 +260,15 @@ struct CodexMeterTests {
             authorizationRequester: { true },
             authorizationStatusProvider: { .authorized },
             requestDeliverer: { request in
-                await tracker.record(identifier: request.identifier)
+                await tracker.record(request: request)
             }
         )
 
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 25, weeklyRemaining: 50), threshold: .twenty)
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 20, weeklyRemaining: 50), threshold: .twenty)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 25, weeklyRemaining: 50), threshold: .twenty, resetNotificationsEnabled: false)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 20, weeklyRemaining: 50), threshold: .twenty, resetNotificationsEnabled: false)
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-20"])
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-threshold-20"])
+        #expect(await tracker.bodies == ["5 hour usage limit reached 20% remaining. Resets 2:35 PM (4h 28m)"])
     }
 
     @Test
@@ -274,15 +278,15 @@ struct CodexMeterTests {
             authorizationRequester: { true },
             authorizationStatusProvider: { .authorized },
             requestDeliverer: { request in
-                await tracker.record(identifier: request.identifier)
+                await tracker.record(request: request)
             }
         )
 
         let snapshot = makeSnapshot(fiveHourRemaining: 15, weeklyRemaining: 50)
-        await service.evaluateNotifications(for: snapshot, threshold: .twenty)
-        await service.evaluateNotifications(for: snapshot, threshold: .twenty)
+        await service.evaluateNotifications(for: snapshot, threshold: .twenty, resetNotificationsEnabled: false)
+        await service.evaluateNotifications(for: snapshot, threshold: .twenty, resetNotificationsEnabled: false)
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-20"])
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-threshold-20"])
     }
 
     @Test
@@ -292,14 +296,14 @@ struct CodexMeterTests {
             authorizationRequester: { true },
             authorizationStatusProvider: { .authorized },
             requestDeliverer: { request in
-                await tracker.record(identifier: request.identifier)
+                await tracker.record(request: request)
             }
         )
 
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 15, weeklyRemaining: 50, fiveHourReset: Date(timeIntervalSince1970: 100)), threshold: .twenty)
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 15, weeklyRemaining: 50, fiveHourReset: Date(timeIntervalSince1970: 200)), threshold: .twenty)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 15, weeklyRemaining: 50, fiveHourReset: Date(timeIntervalSince1970: 100)), threshold: .twenty, resetNotificationsEnabled: false)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 15, weeklyRemaining: 50, fiveHourReset: Date(timeIntervalSince1970: 200)), threshold: .twenty, resetNotificationsEnabled: false)
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-20", "codexmeter-fiveHour-20"])
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-threshold-20", "codexmeter-fiveHour-threshold-20"])
     }
 
     @Test
@@ -309,13 +313,13 @@ struct CodexMeterTests {
             authorizationRequester: { true },
             authorizationStatusProvider: { .authorized },
             requestDeliverer: { request in
-                await tracker.record(identifier: request.identifier)
+                await tracker.record(request: request)
             }
         )
 
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 10, weeklyRemaining: 10), threshold: .twenty)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 10, weeklyRemaining: 10), threshold: .twenty, resetNotificationsEnabled: false)
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-20", "codexmeter-weekly-20"])
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-threshold-20", "codexmeter-weekly-threshold-20"])
     }
 
     @Test
@@ -325,17 +329,103 @@ struct CodexMeterTests {
             authorizationRequester: { true },
             authorizationStatusProvider: { .authorized },
             requestDeliverer: { request in
-                await tracker.record(identifier: request.identifier)
+                await tracker.record(request: request)
             }
         )
 
         let snapshot = makeSnapshot(fiveHourRemaining: 9, weeklyRemaining: 50)
         await service.updateThreshold(.ten)
-        await service.evaluateNotifications(for: snapshot, threshold: .ten)
+        await service.evaluateNotifications(for: snapshot, threshold: .ten, resetNotificationsEnabled: false)
         await service.updateThreshold(.twenty)
-        await service.evaluateNotifications(for: snapshot, threshold: .twenty)
+        await service.evaluateNotifications(for: snapshot, threshold: .twenty, resetNotificationsEnabled: false)
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-10", "codexmeter-fiveHour-20"])
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-threshold-10", "codexmeter-fiveHour-threshold-20"])
+    }
+
+    @Test
+    func resetNotificationsFireWhenUsageReturnsToNinetyNinePercent() async {
+        let tracker = NotificationTracker()
+        let service = NotificationService(
+            authorizationRequester: { true },
+            authorizationStatusProvider: { .authorized },
+            requestDeliverer: { request in
+                await tracker.record(request: request)
+            }
+        )
+
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 42, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 99, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
+
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-reset"])
+        #expect(await tracker.bodies == ["5 hour usage limit reset. 99% remaining. Resets 2:35 PM (4h 28m)"])
+    }
+
+    @Test
+    func resetNotificationsFireWhenUsageReturnsToOneHundredPercent() async {
+        let tracker = NotificationTracker()
+        let service = NotificationService(
+            authorizationRequester: { true },
+            authorizationStatusProvider: { .authorized },
+            requestDeliverer: { request in
+                await tracker.record(request: request)
+            }
+        )
+
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 42, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 100, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
+
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-reset"])
+    }
+
+    @Test
+    func resetNotificationsDoNotFireOnFirstObservationAtResetLevel() async {
+        let tracker = NotificationTracker()
+        let service = NotificationService(
+            authorizationRequester: { true },
+            authorizationStatusProvider: { .authorized },
+            requestDeliverer: { request in
+                await tracker.record(request: request)
+            }
+        )
+
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 99, weeklyRemaining: 100), threshold: nil, resetNotificationsEnabled: true)
+
+        #expect(await tracker.identifiers == [])
+    }
+
+    @Test
+    func resetNotificationsTrackFiveHourAndWeeklyWindowsIndependently() async {
+        let tracker = NotificationTracker()
+        let service = NotificationService(
+            authorizationRequester: { true },
+            authorizationStatusProvider: { .authorized },
+            requestDeliverer: { request in
+                await tracker.record(request: request)
+            }
+        )
+
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 42, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 99, weeklyRemaining: 99), threshold: nil, resetNotificationsEnabled: true)
+
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-reset", "codexmeter-weekly-reset"])
+    }
+
+    @Test
+    func resetNotificationsDoNotRepeatWhileStillAtResetLevel() async {
+        let tracker = NotificationTracker()
+        let service = NotificationService(
+            authorizationRequester: { true },
+            authorizationStatusProvider: { .authorized },
+            requestDeliverer: { request in
+                await tracker.record(request: request)
+            }
+        )
+
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 42, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 99, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 100, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
+
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-reset"])
     }
 
     @MainActor
@@ -426,6 +516,26 @@ struct CodexMeterTests {
 
         #expect(viewModel.menuBarTitle == "Credits")
         #expect(viewModel.menuBarText == "12 cr")
+    }
+
+    @MainActor
+    @Test
+    func viewModelPersistsResetNotificationSettingAndRequestsPermission() async throws {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        let store = PreferencesStore(userDefaults: defaults)
+        let notificationService = MockNotificationService()
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(makeSnapshot())]),
+            preferencesStore: store,
+            notificationService: notificationService
+        )
+
+        viewModel.setResetNotificationsEnabled(true)
+        try await waitUntil { notificationService.authorizationRequestCount == 1 }
+
+        #expect(viewModel.resetNotificationsEnabled)
+        #expect(store.resetNotificationsEnabled)
     }
 
     @Test
@@ -547,10 +657,12 @@ private actor RefreshTracker {
 
 private actor NotificationTracker {
     private(set) var identifiers: [String] = []
+    private(set) var bodies: [String] = []
     private(set) var authorizationRequestCount = 0
 
-    func record(identifier: String) {
-        identifiers.append(identifier)
+    func record(request: UNNotificationRequest) {
+        identifiers.append(request.identifier)
+        bodies.append(request.content.body)
     }
 
     func markAuthorizationRequested() {
@@ -571,10 +683,29 @@ private final class LauncherRecorder: @unchecked Sendable {
     }
 }
 
-private struct MockNotificationService: NotificationScheduling {
-    func requestAuthorizationIfNeeded() async -> Bool { true }
+private final class MockNotificationService: NotificationScheduling, @unchecked Sendable {
+    private let lock = NSLock()
+    private var authorizationRequestCountValue = 0
+
+    var authorizationRequestCount: Int {
+        lock.withLock {
+            authorizationRequestCountValue
+        }
+    }
+
+    func requestAuthorizationIfNeeded() async -> Bool {
+        lock.withLock {
+            authorizationRequestCountValue += 1
+        }
+        return true
+    }
+
     func updateThreshold(_ threshold: NotificationThreshold?) async {}
-    func evaluateNotifications(for snapshot: UsageSnapshot, threshold: NotificationThreshold?) async {}
+    func evaluateNotifications(
+        for snapshot: UsageSnapshot,
+        threshold: NotificationThreshold?,
+        resetNotificationsEnabled: Bool
+    ) async {}
 }
 
 private enum WaitTimeout: Error {
@@ -606,14 +737,15 @@ private struct MockAppLauncher: AppLaunching {
 @MainActor
 private func makeViewModel(
     service: UsageFetching,
-    preferencesStore: PreferencesStore? = nil
+    preferencesStore: PreferencesStore? = nil,
+    notificationService: NotificationScheduling = MockNotificationService()
 ) -> UsageViewModel {
     let store = preferencesStore ?? PreferencesStore(userDefaults: UserDefaults(suiteName: UUID().uuidString)!)
     return UsageViewModel(
         usageService: service,
         preferencesStore: store,
         appLauncher: MockAppLauncher(),
-        notificationService: MockNotificationService(),
+        notificationService: notificationService,
         wakeNotificationCenter: NotificationCenter()
     )
 }

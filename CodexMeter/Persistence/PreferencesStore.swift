@@ -5,6 +5,7 @@ final class PreferencesStore {
         static let pollingInterval: PollingInterval = .minutes5
         static let menuBarDisplayMode: MenuBarDisplayMode = .both
         static let notificationThreshold: NotificationThreshold? = nil
+        static let resetNotificationsEnabled = false
     }
 
     private enum Key {
@@ -12,6 +13,7 @@ final class PreferencesStore {
         static let menuBarDisplayMode = "menuBarDisplayMode"
         static let legacyMenuBarDisplayMode = "statusBarDisplayMode"
         static let notificationThreshold = "notificationThreshold"
+        static let resetNotificationsEnabled = "resetNotificationsEnabled"
     }
 
     private let userDefaults: UserDefaults
@@ -49,7 +51,7 @@ final class PreferencesStore {
         }
     }
 
-    var notificationThreshold: NotificationThreshold? {
+    var limitNotificationThreshold: NotificationThreshold? {
         get {
             guard let value = userDefaults.object(forKey: Key.notificationThreshold) as? Int else {
                 return Default.notificationThreshold
@@ -63,6 +65,19 @@ final class PreferencesStore {
             } else {
                 userDefaults.removeObject(forKey: Key.notificationThreshold)
             }
+        }
+    }
+
+    var resetNotificationsEnabled: Bool {
+        get {
+            guard userDefaults.object(forKey: Key.resetNotificationsEnabled) != nil else {
+                return Default.resetNotificationsEnabled
+            }
+
+            return userDefaults.bool(forKey: Key.resetNotificationsEnabled)
+        }
+        set {
+            userDefaults.set(newValue, forKey: Key.resetNotificationsEnabled)
         }
     }
 }
