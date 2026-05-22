@@ -189,11 +189,17 @@ enum UsageFormatting {
         }
     }
 
-    static func lastUpdatedText(from date: Date, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
+    static func lastUpdatedText(
+        from date: Date,
+        now: Date = Date(),
+        locale: Locale = .current,
+        timeZone: TimeZone = .current
+    ) -> String {
+        let calendar = calendar(locale: locale, timeZone: timeZone)
         let formatter = DateFormatter()
         formatter.locale = locale
         formatter.timeZone = timeZone
-        formatter.dateStyle = .none
+        formatter.dateStyle = calendar.isDate(date, inSameDayAs: now) ? .none : .medium
         formatter.timeStyle = .short
         return formatter.string(from: date)
     }

@@ -41,6 +41,36 @@ struct CodexMeterTests {
     }
 
     @Test
+    func formattingBuildsLastUpdatedTextWithTimeWhenUpdatedToday() {
+        let now = Date(timeIntervalSince1970: 1_778_054_820) // 2026-05-05 10:07 UTC
+        let lastUpdated = Date(timeIntervalSince1970: 1_778_054_340) // 2026-05-05 09:59 UTC
+
+        let text = UsageFormatting.lastUpdatedText(
+            from: lastUpdated,
+            now: now,
+            locale: Locale(identifier: "en_US_POSIX"),
+            timeZone: TimeZone(secondsFromGMT: 0)!
+        )
+
+        #expect(text == "9:59 AM")
+    }
+
+    @Test
+    func formattingBuildsLastUpdatedTextWithDateWhenUpdatedAnotherDay() {
+        let now = Date(timeIntervalSince1970: 1_778_141_800) // 2026-05-06 10:30 UTC
+        let lastUpdated = Date(timeIntervalSince1970: 1_778_054_820) // 2026-05-05 10:07 UTC
+
+        let text = UsageFormatting.lastUpdatedText(
+            from: lastUpdated,
+            now: now,
+            locale: Locale(identifier: "en_US_POSIX"),
+            timeZone: TimeZone(secondsFromGMT: 0)!
+        )
+
+        #expect(text == "May 5, 2026, 10:07 AM")
+    }
+
+    @Test
     func formattingFallsBackToResetAfterSeconds() {
         let now = Date(timeIntervalSince1970: 1_778_054_820)
         let window = UsageWindow(
