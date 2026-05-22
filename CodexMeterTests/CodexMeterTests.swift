@@ -67,7 +67,7 @@ struct CodexMeterTests {
             timeZone: TimeZone(secondsFromGMT: 0)!
         )
 
-        #expect(text == "May 5, 2026, 10:07 AM")
+        #expect(text == "May 5, 2026 10:07 AM")
     }
 
     @Test
@@ -410,6 +410,24 @@ struct CodexMeterTests {
         await service.updateThreshold(.ten)
         await service.evaluateNotifications(for: snapshot, threshold: .ten, resetNotificationsEnabled: false)
         await service.updateThreshold(.twenty)
+        await service.evaluateNotifications(for: snapshot, threshold: .twenty, resetNotificationsEnabled: false)
+
+        #expect(await tracker.identifiers == ["codexmeter-fiveHour-threshold-10", "codexmeter-fiveHour-threshold-20"])
+    }
+
+    @Test
+    func notificationsReconcileThresholdChangesDuringEvaluation() async {
+        let tracker = NotificationTracker()
+        let service = NotificationService(
+            authorizationRequester: { true },
+            authorizationStatusProvider: { .authorized },
+            requestDeliverer: { request in
+                await tracker.record(request: request)
+            }
+        )
+
+        let snapshot = makeSnapshot(fiveHourRemaining: 9, weeklyRemaining: 50)
+        await service.evaluateNotifications(for: snapshot, threshold: .ten, resetNotificationsEnabled: false)
         await service.evaluateNotifications(for: snapshot, threshold: .twenty, resetNotificationsEnabled: false)
 
         #expect(await tracker.identifiers == ["codexmeter-fiveHour-threshold-10", "codexmeter-fiveHour-threshold-20"])

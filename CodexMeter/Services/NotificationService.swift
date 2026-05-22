@@ -65,11 +65,7 @@ actor NotificationService: NotificationScheduling {
     }
 
     func updateThreshold(_ threshold: NotificationThreshold?) async {
-        if threshold != currentThreshold {
-            thresholdStateByWindow.removeAll()
-        }
-
-        currentThreshold = threshold
+        reconcileThreshold(threshold)
     }
 
     func evaluateNotifications(
@@ -77,6 +73,8 @@ actor NotificationService: NotificationScheduling {
         threshold: NotificationThreshold?,
         resetNotificationsEnabled: Bool
     ) async {
+        reconcileThreshold(threshold)
+
         guard threshold != nil || resetNotificationsEnabled else {
             return
         }
@@ -96,6 +94,14 @@ actor NotificationService: NotificationScheduling {
             threshold: threshold,
             resetNotificationsEnabled: resetNotificationsEnabled
         )
+    }
+
+    private func reconcileThreshold(_ threshold: NotificationThreshold?) {
+        if threshold != currentThreshold {
+            thresholdStateByWindow.removeAll()
+        }
+
+        currentThreshold = threshold
     }
 
     private func evaluate(

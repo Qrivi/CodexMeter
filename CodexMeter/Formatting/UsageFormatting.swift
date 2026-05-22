@@ -247,12 +247,21 @@ enum UsageFormatting {
         timeZone: TimeZone = .current
     ) -> String {
         let calendar = calendar(locale: locale, timeZone: timeZone)
-        let formatter = DateFormatter()
-        formatter.locale = locale
-        formatter.timeZone = timeZone
-        formatter.dateStyle = calendar.isDate(date, inSameDayAs: now) ? .none : .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        let timeFormatter = DateFormatter()
+        timeFormatter.locale = locale
+        timeFormatter.timeZone = timeZone
+        timeFormatter.dateStyle = .none
+        timeFormatter.timeStyle = .short
+
+        if calendar.isDate(date, inSameDayAs: now) {
+            return timeFormatter.string(from: date)
+        }
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.locale = locale
+        dateFormatter.timeZone = timeZone
+        dateFormatter.dateFormat = "MMM d, yyyy"
+        return "\(dateFormatter.string(from: date)) \(timeFormatter.string(from: date))"
     }
 
     private static func percentLabel(for remainingPercent: Int?) -> String {

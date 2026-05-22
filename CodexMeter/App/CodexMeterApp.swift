@@ -56,9 +56,8 @@ private enum MenuBarLabelImage {
 
     static func make(title: String, segments: [MenuBarLabelSegment]) -> NSImage {
         let titleSize = title.size(withAttributes: [.font: labelFont])
-        let valueWidth = segments.reduce(0) { width, segment in
-            width + segment.text.size(withAttributes: [.font: valueFont]).width
-        }
+        let segmentWidths = segments.map { $0.text.size(withAttributes: [.font: valueFont]).width }
+        let valueWidth = segmentWidths.reduce(0, +)
         let width = max(titleSize.width, valueWidth)
         let image = NSImage(size: NSSize(width: width, height: height))
 
@@ -76,7 +75,7 @@ private enum MenuBarLabelImage {
             ]
         )
         var x: CGFloat = 0
-        for segment in segments {
+        for (segment, segmentWidth) in zip(segments, segmentWidths) {
             segment.text.draw(
                 at: NSPoint(x: x, y: 0),
                 withAttributes: [
@@ -84,7 +83,7 @@ private enum MenuBarLabelImage {
                     .foregroundColor: color(for: segment.tone)
                 ]
             )
-            x += segment.text.size(withAttributes: [.font: valueFont]).width
+            x += segmentWidth
         }
 
         image.isTemplate = false
