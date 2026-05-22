@@ -76,19 +76,11 @@ final class UsageViewModel: ObservableObject {
 
     var currentFailureMessage: String? {
         switch loadState {
-        case let .failed(message), let .authFailure(message):
+        case let .failed(message):
             return message
         default:
             return nil
         }
-    }
-
-    var showsAuthGuidance: Bool {
-        if case .authFailure = loadState {
-            return true
-        }
-
-        return snapshot?.authGuidanceMessage != nil
     }
 
     func start() {
@@ -227,18 +219,15 @@ final class UsageViewModel: ObservableObject {
         switch error {
         case .auth, .unauthorized:
             if let snapshot {
-                self.snapshot = snapshot.withMessages(
-                    warningMessage: "Update failed",
-                    authGuidanceMessage: error.userFacingMessage
-                )
+                self.snapshot = snapshot.withMessages(warningMessage: error.userFacingMessage)
                 loadState = .loaded
             } else {
-                loadState = .authFailure(message: error.userFacingMessage)
+                loadState = .failed(message: error.userFacingMessage)
             }
 
         case .network, .invalidResponse, .decoding:
             if let snapshot {
-                self.snapshot = snapshot.withMessages(warningMessage: "Update failed", authGuidanceMessage: nil)
+                self.snapshot = snapshot.withMessages(warningMessage: error.userFacingMessage)
                 loadState = .loaded
             } else {
                 loadState = .failed(message: error.userFacingMessage)
@@ -248,10 +237,7 @@ final class UsageViewModel: ObservableObject {
 
     private func applyNonFatalWarning(_ message: String) {
         if let snapshot {
-            self.snapshot = snapshot.withMessages(
-                warningMessage: message,
-                authGuidanceMessage: snapshot.authGuidanceMessage
-            )
+            self.snapshot = snapshot.withMessages(warningMessage: message)
         } else {
             loadState = .failed(message: message)
         }

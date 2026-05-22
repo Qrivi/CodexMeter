@@ -23,9 +23,29 @@ struct CodexMeterApp: App {
         MenuBarExtra {
             UsageMenuView(viewModel: viewModel)
         } label: {
-            Image(nsImage: MenuBarLabelImage.make(title: viewModel.menuBarTitle, segments: viewModel.menuBarTextSegments))
+            MenuBarStatusLabel(viewModel: viewModel)
         }
         .menuBarExtraStyle(.menu)
+    }
+}
+
+private struct MenuBarStatusLabel: View {
+    @ObservedObject var viewModel: UsageViewModel
+
+    var body: some View {
+        let title = viewModel.menuBarTitle
+        let segments = viewModel.menuBarTextSegments
+
+        Image(nsImage: MenuBarLabelImage.make(title: title, segments: segments))
+            .id(labelIdentity(title: title, segments: segments))
+    }
+
+    private func labelIdentity(title: String, segments: [MenuBarLabelSegment]) -> String {
+        let segmentIdentity = segments
+            .map { "\($0.text):\($0.tone)" }
+            .joined(separator: "|")
+
+        return "\(title)|\(segmentIdentity)"
     }
 }
 

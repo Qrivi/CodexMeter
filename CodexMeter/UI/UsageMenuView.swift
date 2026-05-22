@@ -31,21 +31,15 @@ struct UsageMenuView: View {
         Divider()
 
         if let snapshot = viewModel.snapshot {
-            if let authGuidanceMessage = snapshot.authGuidanceMessage {
-                Text(authGuidanceMessage)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
+            Text("Last updated \(UsageFormatting.lastUpdatedText(from: snapshot.lastUpdated))")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
 
             if let warningMessage = snapshot.warningMessage {
                 Text(warningMessage)
                     .font(.footnote)
                     .foregroundStyle(.red)
             }
-
-            Text("Last updated \(UsageFormatting.lastUpdatedText(from: snapshot.lastUpdated))")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
         }
 
         Button("Refresh Now") {

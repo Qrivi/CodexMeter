@@ -100,7 +100,6 @@ enum UsageLoadState: Equatable, Sendable {
     case loading
     case loaded
     case failed(message: String)
-    case authFailure(message: String)
 }
 
 enum UsageLevel: String, Equatable, Sendable {
@@ -182,19 +181,14 @@ struct UsageSnapshot: Equatable, Sendable {
     let creditsText: String
     let lastUpdated: Date
     let warningMessage: String?
-    let authGuidanceMessage: String?
 
-    func withMessages(
-        warningMessage: String? = nil,
-        authGuidanceMessage: String? = nil
-    ) -> UsageSnapshot {
+    func withMessages(warningMessage: String? = nil) -> UsageSnapshot {
         UsageSnapshot(
             fiveHourSection: fiveHourSection,
             weeklySection: weeklySection,
             creditsText: creditsText,
             lastUpdated: lastUpdated,
-            warningMessage: warningMessage,
-            authGuidanceMessage: authGuidanceMessage
+            warningMessage: warningMessage
         )
     }
 }

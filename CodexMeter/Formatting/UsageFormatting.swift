@@ -7,8 +7,7 @@ enum UsageFormatting {
             weeklySection: sectionData(for: response.rateLimit?.secondaryWindow, kind: .weekly, now: now),
             creditsText: creditsText(from: response.credits),
             lastUpdated: now,
-            warningMessage: nil,
-            authGuidanceMessage: nil
+            warningMessage: nil
         )
     }
 
@@ -184,6 +183,10 @@ enum UsageFormatting {
         colorMode: MenuBarColorMode,
         state: UsageLoadState
     ) -> [MenuBarLabelSegment] {
+        if let errorLabel = menuBarErrorLabel(snapshot: snapshot, state: state) {
+            return [MenuBarLabelSegment(text: errorLabel, tone: .critical)]
+        }
+
         guard let snapshot else {
             return [MenuBarLabelSegment(text: fallbackLabel(for: state), tone: .neutral)]
         }
@@ -202,6 +205,21 @@ enum UsageFormatting {
         case .credits:
             return [MenuBarLabelSegment(text: creditsStatusLabel(from: snapshot.creditsText), tone: .neutral)]
         }
+    }
+
+    static func menuBarErrorLabel(snapshot: UsageSnapshot?, state: UsageLoadState) -> String? {
+        switch state {
+        case .failed:
+            return "Error"
+        default:
+            break
+        }
+
+        if snapshot?.warningMessage != nil {
+            return "Error"
+        }
+
+        return nil
     }
 
     static func menuBarTone(

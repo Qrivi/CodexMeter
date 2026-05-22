@@ -152,6 +152,19 @@ struct CodexMeterTests {
     }
 
     @Test
+    func formattingUsesCompactErrorMenuBarSegmentsWhenSnapshotHasFailureMessage() {
+        let warningSnapshot = makeSnapshot().withMessages(warningMessage: "Offline")
+
+        #expect(UsageFormatting.menuBarLabelSegments(
+            snapshot: warningSnapshot,
+            mode: .both,
+            colorMode: .colorful,
+            state: .loaded
+        ) == [MenuBarLabelSegment(text: "Error", tone: .critical)])
+        #expect(UsageFormatting.menuBarLabel(snapshot: nil, mode: .both, state: .failed(message: "Offline")) == "Error")
+    }
+
+    @Test
     func preferencesProvideExpectedDefaults() {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
@@ -528,10 +541,32 @@ struct CodexMeterTests {
         viewModel.refreshNow()
         try await waitUntil { viewModel.loadState == .loaded }
         viewModel.refreshNow()
-        try await waitUntil { viewModel.snapshot?.warningMessage == "Update failed" }
+        try await waitUntil { viewModel.snapshot?.warningMessage == "Offline" }
 
         #expect(viewModel.snapshot?.fiveHourSection.remainingPercent == initialSnapshot.fiveHourSection.remainingPercent)
-        #expect(viewModel.snapshot?.warningMessage == "Update failed")
+        #expect(viewModel.snapshot?.warningMessage == "Offline")
+        #expect(viewModel.menuBarText == "Error")
+        #expect(viewModel.menuBarTextSegments == [MenuBarLabelSegment(text: "Error", tone: .critical)])
+    }
+
+    @MainActor
+    @Test
+    func viewModelShowsErrorStatusInMenuBarAfterStaleDataAuthenticationFailure() async throws {
+        let initialSnapshot = makeSnapshot()
+        let viewModel = makeViewModel(service: MockUsageFetcher(results: [
+            .success(initialSnapshot),
+            .failure(UsageServiceError.unauthorized)
+        ]))
+
+        viewModel.refreshNow()
+        try await waitUntil { viewModel.loadState == .loaded }
+        viewModel.refreshNow()
+        try await waitUntil { viewModel.snapshot?.warningMessage == "Auth token unavailable. Open Codex to refresh it." }
+
+        #expect(viewModel.snapshot?.fiveHourSection.remainingPercent == initialSnapshot.fiveHourSection.remainingPercent)
+        #expect(viewModel.snapshot?.warningMessage == "Auth token unavailable. Open Codex to refresh it.")
+        #expect(viewModel.menuBarText == "Error")
+        #expect(viewModel.menuBarTextSegments == [MenuBarLabelSegment(text: "Error", tone: .critical)])
     }
 
     @MainActor
@@ -540,10 +575,10 @@ struct CodexMeterTests {
         let viewModel = makeViewModel(service: MockUsageFetcher(results: [.failure(UsageServiceError.unauthorized)]))
 
         viewModel.refreshNow()
-        try await waitUntil { viewModel.loadState == .authFailure(message: "Auth token unavailable. Open Codex to refresh it.") }
+        try await waitUntil { viewModel.loadState == .failed(message: "Auth token unavailable. Open Codex to refresh it.") }
 
         #expect(viewModel.currentFailureMessage == "Auth token unavailable. Open Codex to refresh it.")
-        #expect(viewModel.loadState == .authFailure(message: "Auth token unavailable. Open Codex to refresh it."))
+        #expect(viewModel.loadState == .failed(message: "Auth token unavailable. Open Codex to refresh it."))
     }
 
     @MainActor
@@ -861,7 +896,6 @@ private func makeSnapshot(
         ),
         creditsText: "12",
         lastUpdated: Date(timeIntervalSince1970: 1_778_054_820),
-        warningMessage: nil,
-        authGuidanceMessage: nil
+        warningMessage: nil
     )
 }
