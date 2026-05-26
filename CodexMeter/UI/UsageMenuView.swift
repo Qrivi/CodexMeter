@@ -32,13 +32,16 @@ struct UsageMenuView: View {
 
         Divider()
 
-        UsageMenuActionsView(
-            refresh: viewModel.refreshNow,
-            openUsageDashboard: viewModel.openUsageDashboard,
-            openCodex: viewModel.openCodex,
-            openSettings: openSettingsWindow,
-            quit: viewModel.quit
-        )
+        TimelineView(.periodic(from: Date(), by: 1)) { context in
+            UsageMenuActionsView(
+                isRefreshEnabled: viewModel.canRefreshNow(at: context.date),
+                refresh: viewModel.refreshNow,
+                openUsageDashboard: viewModel.openUsageDashboard,
+                openCodex: viewModel.openCodex,
+                openSettings: openSettingsWindow,
+                quit: viewModel.quit
+            )
+        }
     }
 
     private func usageSections(snapshot: UsageSnapshot) -> some View {

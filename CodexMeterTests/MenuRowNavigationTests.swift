@@ -9,6 +9,15 @@ struct MenuRowNavigationTests {
     }
 
     @Test
+    func onlyRefreshStaysOpenAfterActivation() {
+        #expect(MenuActionCatalog.rowsByID[.refresh]?.keepsMenuOpenAfterActivation == true)
+        #expect(MenuActionCatalog.rowsByID[.dashboard]?.keepsMenuOpenAfterActivation == false)
+        #expect(MenuActionCatalog.rowsByID[.codexApp]?.keepsMenuOpenAfterActivation == false)
+        #expect(MenuActionCatalog.rowsByID[.settings]?.keepsMenuOpenAfterActivation == false)
+        #expect(MenuActionCatalog.rowsByID[.quit]?.keepsMenuOpenAfterActivation == false)
+    }
+
+    @Test
     func startsFromEdgesWhenNothingIsSelected() {
         #expect(MenuRowNavigation.next(after: nil) == .refresh)
         #expect(MenuRowNavigation.previous(before: nil) == .quit)

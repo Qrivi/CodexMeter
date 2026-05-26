@@ -83,6 +83,14 @@ final class UsageViewModel: ObservableObject {
         }
     }
 
+    func canRefreshNow(at date: Date = Date()) -> Bool {
+        guard let snapshot else {
+            return true
+        }
+
+        return date.timeIntervalSince(snapshot.lastUpdated) >= 60
+    }
+
     func start() {
         guard didStart == false else {
             return

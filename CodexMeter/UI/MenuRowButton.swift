@@ -18,17 +18,20 @@ struct MenuRowButton: View {
     let action: MenuActionDescriptor
     @Binding var selectedRow: MenuRowID?
     @Binding var hoveredRow: MenuRowID?
+    let isEnabled: Bool
     let perform: () -> Void
 
     init(
         _ action: MenuActionDescriptor,
         selectedRow: Binding<MenuRowID?>,
         hoveredRow: Binding<MenuRowID?>,
+        isEnabled: Bool = true,
         perform: @escaping () -> Void
     ) {
         self.action = action
         self._selectedRow = selectedRow
         self._hoveredRow = hoveredRow
+        self.isEnabled = isEnabled
         self.perform = perform
     }
 
@@ -57,8 +60,10 @@ struct MenuRowButton: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(isEnabled == false)
         .focusable(false)
         .foregroundStyle(foregroundStyle)
+        .opacity(isEnabled ? 1 : 0.45)
         .background {
             if isHighlighted {
                 RoundedRectangle(cornerRadius: 5)
@@ -76,6 +81,10 @@ struct MenuRowButton: View {
     }
 
     private var isHighlighted: Bool {
+        guard isEnabled else {
+            return false
+        }
+
         if let selectedRow {
             return selectedRow == action.id
         }
@@ -84,6 +93,10 @@ struct MenuRowButton: View {
     }
 
     private var foregroundStyle: Color {
+        guard isEnabled else {
+            return .secondary
+        }
+
         if isHighlighted {
             return .white
         }
@@ -92,6 +105,10 @@ struct MenuRowButton: View {
     }
 
     private var shortcutForegroundStyle: Color {
+        guard isEnabled else {
+            return .secondary
+        }
+
         if isHighlighted {
             return .white
         }

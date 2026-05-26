@@ -5,7 +5,8 @@ func makeSnapshot(
     fiveHourRemaining: Int = 64,
     weeklyRemaining: Int = 73,
     fiveHourReset: Date = Date(timeIntervalSince1970: 1_778_070_900),
-    weeklyReset: Date = Date(timeIntervalSince1970: 1_778_141_800)
+    weeklyReset: Date = Date(timeIntervalSince1970: 1_778_141_800),
+    lastUpdated: Date = Date(timeIntervalSince1970: 1_778_054_820)
 ) -> UsageSnapshot {
     UsageSnapshot(
         fiveHourSection: UsageSectionViewData(
@@ -27,7 +28,7 @@ func makeSnapshot(
             windowKind: .weekly
         ),
         creditsText: "12",
-        lastUpdated: Date(timeIntervalSince1970: 1_778_054_820),
+        lastUpdated: lastUpdated,
         warningMessage: nil
     )
 }

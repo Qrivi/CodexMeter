@@ -1,12 +1,14 @@
 import SwiftUI
 
 struct UsageMenuActionsView: View {
+    let isRefreshEnabled: Bool
     let refresh: () -> Void
     let openUsageDashboard: () -> Void
     let openCodex: () -> Void
     let openSettings: () -> Void
     let quit: () -> Void
 
+    @Environment(\.dismiss) private var dismiss
     @FocusState private var receivesKeyboardInput: Bool
     @State private var selectedRow: MenuRowID?
     @State private var hoveredRow: MenuRowID?
@@ -46,7 +48,8 @@ struct UsageMenuActionsView: View {
                 MenuRowButton(
                     action,
                     selectedRow: $selectedRow,
-                    hoveredRow: $hoveredRow
+                    hoveredRow: $hoveredRow,
+                    isEnabled: isActionEnabled(action.id)
                 ) {
                     perform(action.id)
                 }
@@ -87,6 +90,16 @@ struct UsageMenuActionsView: View {
     }
 
     private func perform(_ row: MenuRowID) {
+        guard isActionEnabled(row) else {
+            return
+        }
+
+        defer {
+            if shouldHideMenu(afterActivating: row) {
+                dismiss()
+            }
+        }
+
         switch row {
         case .refresh:
             refresh()
@@ -98,6 +111,19 @@ struct UsageMenuActionsView: View {
             openSettings()
         case .quit:
             quit()
+        }
+    }
+
+    private func shouldHideMenu(afterActivating row: MenuRowID) -> Bool {
+        MenuActionCatalog.rowsByID[row]?.keepsMenuOpenAfterActivation != true
+    }
+
+    private func isActionEnabled(_ row: MenuRowID) -> Bool {
+        switch row {
+        case .refresh:
+            isRefreshEnabled
+        default:
+            true
         }
     }
 }

@@ -18,6 +18,21 @@ struct UsageViewModelTests {
 
     @MainActor
     @Test
+    func disablesManualRefreshForOneMinuteAfterLatestRefresh() async throws {
+        let latestRefresh = Date(timeIntervalSince1970: 1_778_054_820)
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(makeSnapshot(lastUpdated: latestRefresh))])
+        )
+
+        viewModel.refreshNow()
+        try await waitUntil { viewModel.loadState == .loaded }
+
+        #expect(viewModel.canRefreshNow(at: latestRefresh.addingTimeInterval(59)) == false)
+        #expect(viewModel.canRefreshNow(at: latestRefresh.addingTimeInterval(60)) == true)
+    }
+
+    @MainActor
+    @Test
     func doesNotOverlapRefreshRequests() async throws {
         let tracker = RefreshTracker()
         let service = BlockingUsageFetcher(tracker: tracker, snapshot: makeSnapshot())
