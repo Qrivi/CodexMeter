@@ -61,13 +61,17 @@ enum MenuActionCatalog {
         MenuActionDescriptor(id: .codexApp, title: "Open Codex App", assetImage: "CodexLogo")
     ]
 
-    static let appActions = [
-        MenuActionDescriptor(id: .settings, title: "Settings", systemImage: MacOSRelease.isSequoia ? nil : "gear", shortcut: "⌘ ,"),
-        MenuActionDescriptor(id: .quit, title: "Quit CodexMeter", systemImage: MacOSRelease.isSequoia ? nil : "xmark.rectangle", shortcut: "⌘ Q")
-    ]
+    static let appActions = appActions(on: ProcessInfo.processInfo.operatingSystemVersion)
 
     static let rows = usageActions.map(\.id) + appActions.map(\.id)
     static let rowsByID = Dictionary(uniqueKeysWithValues: (usageActions + appActions).map { ($0.id, $0) })
+
+    static func appActions(on version: OperatingSystemVersion) -> [MenuActionDescriptor] {
+        [
+            MenuActionDescriptor(id: .settings, title: "Settings", systemImage: MacOSRelease.isSequoia(version) ? nil : "gear", shortcut: "⌘ ,"),
+            MenuActionDescriptor(id: .quit, title: "Quit CodexMeter", systemImage: MacOSRelease.isSequoia(version) ? nil : "xmark.rectangle", shortcut: "⌘ Q")
+        ]
+    }
 }
 
 enum MenuActionSection {

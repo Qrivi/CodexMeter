@@ -170,28 +170,86 @@ struct NotificationSettingsPane: View {
 }
 
 struct AboutSettingsPane: View {
+    @StateObject private var model = AboutPaneModel()
+
     var body: some View {
         SettingsPaneContainer {
             Section("CodexMeter") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("CodexMeter")
-                        .font(.title2.weight(.semibold))
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .center, spacing: 12) {
+                        Image("CodexLogo")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 42, height: 42)
+                            .accessibilityHidden(true)
 
-                    Text("A small macOS menu bar app for keeping an eye on Codex usage limits.")
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("CodexMeter")
+                                .font(.title2.weight(.semibold))
+
+                            Text(versionText)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Text("Small menu bar app for monitoring Codex usage limits.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 4)
+            }
+
+            Section("Updates") {
+                VStack(alignment: .leading, spacing: 10) {
+                    updateStatusView
+                    
+                    Divider()
+
+                    Text("Install with Homebrew for the simplest updates:")
                         .foregroundStyle(.secondary)
 
-                    Text(versionText)
+                    Text("brew install qrivi/tap/codexmeter")
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
+
+                    Text("Then update with:")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+
+                    Text("brew upgrade codexmeter")
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
                 }
                 .padding(.vertical, 4)
             }
 
             Section("Privacy") {
-                Text("CodexMeter reads the Codex auth file from ~/.codex/auth.json. It does not ask for or store your password.")
+                privacyText
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, 4)
             }
+
+            Section("Links") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Link(destination: Self.repositoryURL) {
+                        Label("GitHub repository", systemImage: "arrow.up.right.square")
+                    }
+
+                    Link(destination: Self.releasesURL) {
+                        Label("Releases", systemImage: "shippingbox")
+                    }
+
+                    Link(destination: Self.licenseURL) {
+                        Label("MIT License", systemImage: "doc.text")
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .task {
+            model.checkForUpdates()
         }
     }
 
@@ -208,6 +266,50 @@ struct AboutSettingsPane: View {
             return "Version unavailable"
         }
     }
+
+    @ViewBuilder
+    private var updateStatusView: some View {
+        switch model.updateStatus {
+        case .idle, .checking:
+            Label("Checking GitHub for updates...", systemImage: "arrow.triangle.2.circlepath")
+                .foregroundStyle(.secondary)
+
+        case let .current(latestVersion):
+            Label("You are on the latest release, \(latestVersion).", systemImage: "checkmark.circle")
+                .foregroundStyle(UsageStatusPalette.good)
+
+        case let .updateAvailable(release):
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Update available: \(release.version)", systemImage: "arrow.down.circle")
+                    .foregroundStyle(UsageStatusPalette.warning)
+
+                Link(destination: release.pageURL) {
+                    Label("Open latest release", systemImage: "arrow.up.right.square")
+                }
+            }
+
+        case .unavailable:
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Could not check for updates right now.", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.secondary)
+
+                Button("Check Again") {
+                    model.checkForUpdates()
+                }
+            }
+        }
+    }
+
+    private var privacyText: Text {
+        Text("CodexMeter reads your local Codex auth session from ")
+            + Text("~/.codex/auth.json")
+                .font(.system(.body, design: .monospaced))
+            + Text(" to fetch usage information. It does not ask for or store your password.")
+    }
+
+    private static let repositoryURL = URL(string: "https://github.com/Qrivi/CodexMeter")!
+    private static let releasesURL = URL(string: "https://github.com/Qrivi/CodexMeter/releases")!
+    private static let licenseURL = URL(string: "https://github.com/Qrivi/CodexMeter/blob/main/LICENSE")!
 }
 
 #if DEBUG

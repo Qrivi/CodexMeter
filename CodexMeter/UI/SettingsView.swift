@@ -49,6 +49,7 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.borderless)
                             .accessibilityLabel(title)
+                            .padding(.horizontal, 10)
                         }
                     }
                 }
