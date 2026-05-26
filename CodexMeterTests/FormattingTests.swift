@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 @testable import CodexMeter
@@ -162,5 +163,13 @@ struct FormattingTests {
             state: .loaded
         ) == [MenuBarLabelSegment(text: "Error", tone: .critical)])
         #expect(UsageFormatting.menuBarLabel(snapshot: nil, mode: .both, state: .failed(message: "Offline")) == "Error")
+    }
+
+    @Test
+    func menuBarLabelNeutralColorFollowsMenuBarAppearance() {
+        #expect(MenuBarLabelColors.color(for: .neutral, isMenuBarDark: true) == .white)
+        #expect(MenuBarLabelColors.color(for: .neutral, isMenuBarDark: false) == .black)
+        #expect(MenuBarLabelColors.color(for: .critical, isMenuBarDark: true) == UsageStatusPalette.criticalColor)
+        #expect(MenuBarLabelColors.color(for: .critical, isMenuBarDark: false) == UsageStatusPalette.criticalColor)
     }
 }

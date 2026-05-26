@@ -119,8 +119,10 @@ private struct UsageSectionView: View {
             }
 
             if let remainingPercent = section.remainingPercent {
-                ProgressView(value: Double(remainingPercent), total: 100)
-                    .tint(meterColorMode.color(level: section.level, remainingPercent: remainingPercent))
+                UsageMeterView(
+                    remainingPercent: remainingPercent,
+                    color: meterColorMode.color(level: section.level, remainingPercent: remainingPercent)
+                )
             }
 
             if let resetText = section.resetText {
@@ -129,6 +131,32 @@ private struct UsageSectionView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+private struct UsageMeterView: View {
+    let remainingPercent: Int
+    let color: Color
+
+    private var fillFraction: CGFloat {
+        CGFloat(min(max(remainingPercent, 0), 100)) / 100
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color(nsColor: .separatorColor).opacity(0.55))
+
+                Capsule()
+                    .fill(color)
+                    .frame(width: proxy.size.width * fillFraction)
+            }
+        }
+        .frame(height: 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Remaining usage")
+        .accessibilityValue("\(min(max(remainingPercent, 0), 100)) percent")
     }
 }
 

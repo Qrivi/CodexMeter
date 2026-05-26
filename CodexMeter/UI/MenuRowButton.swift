@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct MenuRowSection<Content: View>: View {
@@ -96,8 +97,8 @@ struct MenuRowButton: View {
 
     @ViewBuilder
     private func actionIcon(_ icon: MenuActionIcon) -> some View {
-        let size: CGFloat = MacOSRelease.isSequoia ? 15 : 13;
-        
+        let size: CGFloat = MacOSRelease.isSequoia ? 15 : 13
+
         switch icon {
         case .system(let systemImage):
             Image(systemName: systemImage)
@@ -118,7 +119,7 @@ struct MenuRowButton: View {
         }
 
         if isHighlighted {
-            return AnyShapeStyle(.white)
+            return AnyShapeStyle(Color(nsColor: .selectedMenuItemTextColor))
         }
 
         return AnyShapeStyle(.primary)
@@ -130,7 +131,7 @@ struct MenuRowButton: View {
         }
 
         if isHighlighted {
-            return AnyShapeStyle(.white)
+            return AnyShapeStyle(Color(nsColor: .selectedMenuItemTextColor))
         }
 
         return AnyShapeStyle(.tertiary)
