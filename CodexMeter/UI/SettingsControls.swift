@@ -96,6 +96,8 @@ struct SettingsToggleRow: View {
 }
 
 private struct SettingsRowLabel: View {
+    private let descriptionMaxWidth: CGFloat = 270
+
     let title: String
     let description: String
 
@@ -107,6 +109,7 @@ private struct SettingsRowLabel: View {
             Text(description)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .frame(maxWidth: descriptionMaxWidth, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -126,9 +129,7 @@ private struct SettingsControlsPreview: View {
                     selection: $colorMode,
                     options: UsageColorMode.allCases,
                     label: \.menuTitle
-                ) {
-                    MenuBarColorPreview(colorMode: colorMode)
-                }
+                )
             }
 
             Section("Toggle") {

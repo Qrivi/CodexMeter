@@ -1,57 +1,177 @@
 import SwiftUI
 
-struct MenuBarColorPreview: View {
-    let colorMode: UsageColorMode
+struct AppearanceSettingsPreview: View {
+    private let cycleDuration: TimeInterval = 15
+
+    let menuBarDisplayMode: MenuBarDisplayMode
+    let menuBarColorMode: UsageColorMode
+    let meterColorMode: UsageColorMode
+    let remainingLabelColorMode: UsageColorMode
 
     var body: some View {
-        HStack(spacing: 4) {
-            Text("Limits")
-                .foregroundStyle(.secondary)
+        TimelineView(.animation) { context in
+            let remainingPercent = animatedPercent(at: context.date)
+            let level = UsageFormatting.level(for: remainingPercent)
+            let snapshot = previewSnapshot(remainingPercent: remainingPercent, level: level)
 
-            Text("64%")
-                .foregroundStyle(colorMode.color(level: .good, remainingPercent: 64))
-
-            Text("/")
-                .foregroundStyle(.secondary)
-
-            Text("18%")
-                .foregroundStyle(colorMode.color(level: .critical, remainingPercent: 18))
+            VStack(alignment: .leading, spacing: 8) {
+                menuBarPreview(snapshot: snapshot)
+                HStack {
+                    Spacer()
+                    appMenuPreview(remainingPercent: remainingPercent, level: level)
+                }
+            }
+            .padding(.vertical, 4)
         }
-        .font(.caption.monospacedDigit())
-        .padding(.leading, 2)
+    }
+
+    private func menuBarPreview(snapshot: UsageSnapshot) -> some View {
+        let segments = UsageFormatting.menuBarLabelSegments(
+            snapshot: snapshot,
+            mode: menuBarDisplayMode,
+            colorMode: menuBarColorMode,
+            state: .loaded
+        )
+
+        return HStack(spacing: 10) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: "apple.logo")
+                    .font(.body)
+                Text("Finder")
+                    .fontWeight(.semibold)
+                Text("File")
+                Text("Edit")
+                Text("View")
+                Text("Window")
+                Text("Help")
+            }
+            .font(.caption)
+            .foregroundStyle(.primary)
+
+            Spacer(minLength: 12)
+
+            MenuBarItemPreview(title: menuBarDisplayMode.menuBarTitle, segments: segments)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.bar, in: RoundedRectangle(cornerRadius: 6))
+        .overlay {
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(.quaternary)
+        }
+    }
+
+    private func appMenuPreview(remainingPercent: Int, level: UsageLevel) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("5 hour usage limit")
+                    .font(.headline)
+
+                Spacer()
+
+                Text("\(remainingPercent)% remaining")
+                    .font(.body.monospacedDigit())
+                    .foregroundStyle(remainingLabelColorMode.color(
+                        level: level,
+                        remainingPercent: remainingPercent
+                    ))
+            }
+
+            ProgressView(value: Double(remainingPercent), total: 100)
+                .tint(meterColorMode.color(level: level, remainingPercent: remainingPercent))
+        }
+        .padding(.horizontal, MacOSRelease.isSequoia ? 10 : 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: 280)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(.quaternary)
+        }
+    }
+
+    private func animatedPercent(at date: Date) -> Int {
+        let cyclePosition = date.timeIntervalSinceReferenceDate
+            .truncatingRemainder(dividingBy: cycleDuration * 2)
+        let progress = cyclePosition <= cycleDuration
+            ? cyclePosition / cycleDuration
+            : (cycleDuration * 2 - cyclePosition) / cycleDuration
+
+        return Int((progress * 100).rounded())
+    }
+
+    private func previewSnapshot(remainingPercent: Int, level: UsageLevel) -> UsageSnapshot {
+        let weeklyPercent = 100 - remainingPercent
+
+        return UsageSnapshot(
+            fiveHourSection: previewSection(
+                kind: .fiveHour,
+                remainingPercent: remainingPercent,
+                level: level
+            ),
+            weeklySection: previewSection(
+                kind: .weekly,
+                remainingPercent: weeklyPercent,
+                level: UsageFormatting.level(for: weeklyPercent)
+            ),
+            creditsText: "1,234",
+            lastUpdated: Date(),
+            warningMessage: nil
+        )
+    }
+
+    private func previewSection(
+        kind: UsageWindowKind,
+        remainingPercent: Int,
+        level: UsageLevel
+    ) -> UsageSectionViewData {
+        UsageSectionViewData(
+            title: kind.sectionTitle,
+            remainingText: "\(remainingPercent)% remaining",
+            resetText: nil,
+            remainingPercent: remainingPercent,
+            level: level,
+            resetDate: nil,
+            windowKind: kind
+        )
     }
 }
 
-struct MeterColorPreview: View {
-    let colorMode: UsageColorMode
+private struct MenuBarItemPreview: View {
+    let title: String
+    let segments: [MenuBarLabelSegment]
 
     var body: some View {
-        VStack(spacing: 6) {
-            previewMeter(value: 64, level: .good)
-            previewMeter(value: 18, level: .critical)
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.system(size: 7))
+                .lineLimit(1)
+
+            HStack(spacing: 0) {
+                ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+                    Text(segment.text)
+                        .foregroundStyle(color(for: segment.tone))
+                }
+            }
+            .font(.system(size: 12).monospacedDigit())
+            .lineLimit(1)
         }
-        .frame(maxWidth: 240)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
     }
 
-    private func previewMeter(value: Int, level: UsageLevel) -> some View {
-        ProgressView(value: Double(value), total: 100)
-            .tint(colorMode.color(level: level, remainingPercent: value))
-    }
-}
-
-struct RemainingLabelColorPreview: View {
-    let colorMode: UsageColorMode
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Text("64% remaining")
-                .foregroundStyle(colorMode.color(level: .good, remainingPercent: 64))
-
-            Text("18% remaining")
-                .foregroundStyle(colorMode.color(level: .critical, remainingPercent: 18))
+    private func color(for tone: MenuBarTextTone) -> Color {
+        switch tone {
+        case .neutral:
+            .primary
+        case .good:
+            UsageStatusPalette.good
+        case .warning:
+            UsageStatusPalette.warning
+        case .critical:
+            UsageStatusPalette.critical
         }
-        .font(.caption.monospacedDigit())
-        .padding(.leading, 2)
     }
 }
 
@@ -59,17 +179,23 @@ struct RemainingLabelColorPreview: View {
 struct SettingsPreviewComponents_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            MenuBarColorPreview(colorMode: .colorfulWhenLow)
-                .padding()
-                .previewDisplayName("Menu Bar Color Preview")
+            AppearanceSettingsPreview(
+                menuBarDisplayMode: .fiveHourRemaining,
+                menuBarColorMode: .colorfulWhenLow,
+                meterColorMode: .colorful,
+                remainingLabelColorMode: .colorfulWhenLow
+            )
+            .padding()
+            .previewDisplayName("Appearance Settings Preview")
 
-            MeterColorPreview(colorMode: .colorful)
-                .padding()
-                .previewDisplayName("Meter Color Preview")
-
-            RemainingLabelColorPreview(colorMode: .colorfulWhenLow)
-                .padding()
-                .previewDisplayName("Remaining Label Color Preview")
+            AppearanceSettingsPreview(
+                menuBarDisplayMode: .both,
+                menuBarColorMode: .colorful,
+                meterColorMode: .monochrome,
+                remainingLabelColorMode: .colorful
+            )
+            .padding()
+            .previewDisplayName("Appearance Settings Preview Both")
         }
     }
 }

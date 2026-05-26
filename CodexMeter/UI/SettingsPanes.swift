@@ -30,7 +30,7 @@ struct GeneralSettingsPane: View {
 
                 SettingsToggleRow(
                     title: "Poll when menu opens",
-                    description: "Refresh immediately when opening the menu bar window, useful when the background polling rate is low.",
+                    description: "Refresh immediately when opening the menu bar window (useful when background polling rate is low).",
                     isOn: pollOnMenuOpenBinding
                 )
             }
@@ -79,9 +79,7 @@ struct AppearanceSettingsPane: View {
                     selection: menuBarColorModeBinding,
                     options: UsageColorMode.allCases,
                     label: \.menuTitle
-                ) {
-                    MenuBarColorPreview(colorMode: viewModel.menuBarColorMode)
-                }
+                )
             }
 
             Section("In-App Meters") {
@@ -91,9 +89,7 @@ struct AppearanceSettingsPane: View {
                     selection: meterColorModeBinding,
                     options: UsageColorMode.allCases,
                     label: \.menuTitle
-                ) {
-                    MeterColorPreview(colorMode: viewModel.meterColorMode)
-                }
+                )
 
                 SettingsPickerRow(
                     title: "Remaining label colors",
@@ -101,9 +97,7 @@ struct AppearanceSettingsPane: View {
                     selection: remainingLabelColorModeBinding,
                     options: UsageColorMode.allCases,
                     label: \.menuTitle
-                ) {
-                    RemainingLabelColorPreview(colorMode: viewModel.remainingLabelColorMode)
-                }
+                )
             }
         }
     }
