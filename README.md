@@ -1,12 +1,16 @@
-<img src="./.github/screenshot.png" width="40%" align="right" alt="CodexMeter in the menu bar">
+<img src="./.github/screenshot.png" alt="CodexMeter menu bar app and settings">
 
 # CodexMeter
 
-CodexMeter is a small macOS menu bar app for keeping an eye on Codex usage limits.
+CodexMeter is a macOS menu bar companion for keeping Codex usage visible at all times.
 
-It reads the local Codex auth session, fetches the Codex usage endpoint, and shows the current 5 hour and weekly
-remaining limits in the menu bar. The menu also includes reset times, credits remaining, polling controls, notification
-settings, and shortcuts to Codex and the usage dashboard.
+It reads your local Codex auth session, fetches the Codex usage endpoint, and shows your current 5 hour and weekly
+remaining limits, reset times, and credits. The menu bar label can show either usage window, both windows, or credits,
+with configurable monochrome and warning color modes for both the compact label and the menu meters.
+
+The menu includes quick refresh, shortcuts to Codex and the usage dashboard, stale/error status, and a settings window
+for polling, launch at login, menu-open refreshes, appearance, and notifications. Optional notifications can alert you
+when a usage limit gets low or when a limit resets.
 
 ## Requirements
 
