@@ -180,7 +180,7 @@ enum UsageFormatting {
     static func menuBarLabelSegments(
         snapshot: UsageSnapshot?,
         mode: MenuBarDisplayMode,
-        colorMode: MenuBarColorMode,
+        colorMode: UsageColorMode,
         state: UsageLoadState
     ) -> [MenuBarLabelSegment] {
         if let errorLabel = menuBarErrorLabel(snapshot: snapshot, state: state) {
@@ -224,7 +224,7 @@ enum UsageFormatting {
 
     static func menuBarTone(
         for section: UsageSectionViewData,
-        colorMode: MenuBarColorMode
+        colorMode: UsageColorMode
     ) -> MenuBarTextTone {
         switch colorMode {
         case .monochrome:
@@ -274,7 +274,7 @@ enum UsageFormatting {
 
     private static func percentSegment(
         for section: UsageSectionViewData,
-        colorMode: MenuBarColorMode
+        colorMode: UsageColorMode
     ) -> MenuBarLabelSegment {
         MenuBarLabelSegment(
             text: percentLabel(for: section.remainingPercent),

@@ -1,17 +1,16 @@
+import AppKit
 import SwiftUI
 
 struct UsageMenuView: View {
     @ObservedObject var viewModel: UsageViewModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Group {
-            if viewModel.isLoadingWithoutSnapshot {
-                Text("Loading…")
-            } else {
-                content
-            }
+        VStack(alignment: .leading) {
+            content
         }
-        .frame(minWidth: 320)
+        .padding(MacOSRelease.isSequoia ? 4 : 6)
+        .frame(width: 280)
         .onAppear {
             viewModel.menuOpened()
         }
@@ -19,173 +18,112 @@ struct UsageMenuView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let snapshot = viewModel.snapshot {
-            usageSections(snapshot: snapshot)
-        } else if let message = viewModel.currentFailureMessage {
-            Text(message)
-                .foregroundStyle(.secondary)
-        } else {
-            Text("Loading…")
-        }
-
-        Divider()
-
-        if let snapshot = viewModel.snapshot {
-            Text("Last updated \(UsageFormatting.lastUpdatedText(from: snapshot.lastUpdated))")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-            if let warningMessage = snapshot.warningMessage {
-                Text(warningMessage)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
+        VStack(alignment: .leading, spacing: 12) {
+            if let snapshot = viewModel.snapshot {
+                usageSections(snapshot: snapshot)
+            } else if let message = viewModel.currentFailureMessage {
+                Text(message)
+                    .foregroundStyle(.secondary)
+                    .padding(12)
+            } else {
+                Text("Loading…")
+                    .foregroundStyle(.secondary)
+                    .padding(12)
             }
         }
 
-        Button("Refresh Now") {
-            viewModel.refreshNow()
-        }
-
-        Button("Open Usage Dashboard") {
-            viewModel.openUsageDashboard()
-        }
-
-        Button("Open Codex App") {
-            viewModel.openCodex()
-        }
+        statusSection
 
         Divider()
+            .padding(.horizontal, 11)
 
-        pollingRateMenu
-        menuBarMenu
-        notificationsMenu
-
-        Divider()
-
-        Button("Quit") {
-            viewModel.quit()
+        TimelineView(.periodic(from: Date(), by: 1)) { context in
+            UsageMenuActionsView(
+                isRefreshEnabled: viewModel.canRefreshNow(at: context.date),
+                refresh: viewModel.refreshNow,
+                openUsageDashboard: viewModel.openUsageDashboard,
+                openCodex: viewModel.openCodex,
+                openSettings: openSettingsWindow,
+                quit: viewModel.quit
+            )
         }
     }
 
     private func usageSections(snapshot: UsageSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            UsageSectionView(section: snapshot.fiveHourSection)
-            Divider()
-            UsageSectionView(section: snapshot.weeklySection)
-            Divider()
-            VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 20) {
+            UsageSectionView(
+                section: snapshot.fiveHourSection,
+                meterColorMode: viewModel.meterColorMode,
+                remainingLabelColorMode: viewModel.remainingLabelColorMode
+            )
+            UsageSectionView(
+                section: snapshot.weeklySection,
+                meterColorMode: viewModel.meterColorMode,
+                remainingLabelColorMode: viewModel.remainingLabelColorMode
+            )
+            HStack(alignment: .firstTextBaseline) {
                 Text("Credits remaining")
                     .font(.headline)
+                Spacer()
                 Text(snapshot.creditsText)
+                    .font(.body.monospacedDigit())
             }
         }
+        .padding(.horizontal, MacOSRelease.isSequoia ? 10 : 12)
+        .padding(.vertical, 10)
     }
 
-    private var pollingRateMenu: some View {
-        Menu("Polling Rate") {
-            ForEach(PollingInterval.allCases) { interval in
-                selectionToggle(
-                    interval.title,
-                    isSelected: viewModel.pollingInterval == interval,
-                    select: { viewModel.selectPollingInterval(interval) }
-                )
-            }
-        }
-    }
+    @ViewBuilder
+    private var statusSection: some View {
+        if let snapshot = viewModel.snapshot {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Last updated \(UsageFormatting.lastUpdatedText(from: snapshot.lastUpdated))")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
 
-    private var menuBarMenu: some View {
-        Menu("Show in Menu Bar") {
-            Text("Usage Data")
-
-            ForEach(MenuBarDisplayMode.allCases) { mode in
-                selectionToggle(
-                    mode.menuTitle,
-                    isSelected: viewModel.menuBarDisplayMode == mode,
-                    select: { viewModel.selectMenuBarDisplayMode(mode) }
-                )
-            }
-
-            Divider()
-            Text("Color")
-
-            ForEach(MenuBarColorMode.allCases) { mode in
-                selectionToggle(
-                    mode.menuTitle,
-                    isSelected: viewModel.menuBarColorMode == mode,
-                    select: { viewModel.selectMenuBarColorMode(mode) }
-                )
-            }
-        }
-    }
-
-    private var notificationsMenu: some View {
-        Menu("Notifications") {
-            Text("Low Usage")
-
-            selectionToggle(
-                "Off",
-                isSelected: viewModel.limitNotificationThreshold == nil,
-                select: { viewModel.selectNotificationThreshold(nil) }
-            )
-
-            ForEach(NotificationThreshold.allCases) { threshold in
-                selectionToggle(
-                    threshold.title,
-                    isSelected: viewModel.limitNotificationThreshold == threshold,
-                    select: { viewModel.selectNotificationThreshold(threshold) }
-                )
-            }
-
-            Divider()
-            Text("Limit Reset")
-
-            selectionToggle(
-                "Off",
-                isSelected: viewModel.resetNotificationsEnabled == false,
-                select: { viewModel.setResetNotificationsEnabled(false) }
-            )
-
-            selectionToggle(
-                "Notify when reset",
-                isSelected: viewModel.resetNotificationsEnabled,
-                select: { viewModel.setResetNotificationsEnabled(true) }
-            )
-        }
-    }
-
-    private func selectionToggle(
-        _ title: String,
-        isSelected: Bool,
-        select: @escaping () -> Void
-    ) -> some View {
-        Toggle(
-            "  \(title)",
-            isOn: selectionBinding(isSelected: isSelected, select: select)
-        )
-    }
-
-    private func selectionBinding(isSelected: Bool, select: @escaping () -> Void) -> Binding<Bool> {
-        Binding(
-            get: { isSelected },
-            set: { newValue in
-                if newValue {
-                    select()
+                if let warningMessage = snapshot.warningMessage {
+                    Text(warningMessage)
+                        .font(.footnote)
+                        .foregroundStyle(UsageStatusPalette.critical)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-            }
-        )
+            }.padding(.horizontal, MacOSRelease.isSequoia ? 10 : 12)
+        }
+    }
+
+    private func openSettingsWindow() {
+        openWindow(id: "settings")
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
 
 private struct UsageSectionView: View {
     let section: UsageSectionViewData
+    let meterColorMode: UsageColorMode
+    let remainingLabelColorMode: UsageColorMode
 
     var body: some View {
-        VStack(alignment: .leading) {
-            Text(section.title)
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(section.title)
+                    .font(.headline)
 
-            Text(section.remainingText)
-                .foregroundStyle(color(for: section.level))
+                Spacer()
+
+                Text(section.remainingText)
+                    .font(.body.monospacedDigit())
+                    .foregroundStyle(remainingLabelColorMode.color(
+                        level: section.level,
+                        remainingPercent: section.remainingPercent
+                    ))
+            }
+
+            if let remainingPercent = section.remainingPercent {
+                UsageMeterView(
+                    remainingPercent: remainingPercent,
+                    color: meterColorMode.color(level: section.level, remainingPercent: remainingPercent)
+                )
+            }
 
             if let resetText = section.resetText {
                 Text(resetText)
@@ -194,17 +132,55 @@ private struct UsageSectionView: View {
             }
         }
     }
+}
 
-    private func color(for level: UsageLevel) -> Color {
-        switch level {
-        case .good:
-            .green
-        case .warning:
-            .yellow
-        case .critical:
-            .red
-        case .neutral:
-            .secondary
+private struct UsageMeterView: View {
+    let remainingPercent: Int
+    let color: Color
+
+    private var fillFraction: CGFloat {
+        CGFloat(min(max(remainingPercent, 0), 100)) / 100
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color(nsColor: .separatorColor).opacity(0.55))
+
+                Capsule()
+                    .fill(color)
+                    .frame(width: proxy.size.width * fillFraction)
+            }
+        }
+        .frame(height: 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Remaining usage")
+        .accessibilityValue("\(min(max(remainingPercent, 0), 100)) percent")
+    }
+}
+
+#if DEBUG
+struct UsageMenuView_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            UsageMenuView(viewModel: PreviewSupport.viewModel())
+                .frame(width: 340)
+                .previewDisplayName("Usage Menu")
+
+            UsageMenuView(viewModel: PreviewSupport.failingViewModel())
+                .frame(width: 340)
+                .previewDisplayName("Usage Menu Error")
+
+            UsageSectionView(
+                section: PreviewSupport.snapshot.weeklySection,
+                meterColorMode: .colorful,
+                remainingLabelColorMode: .colorfulWhenLow
+            )
+            .padding()
+            .frame(width: 340)
+            .previewDisplayName("Usage Section")
         }
     }
 }
+#endif

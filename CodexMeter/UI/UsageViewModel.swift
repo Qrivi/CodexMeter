@@ -8,14 +8,20 @@ final class UsageViewModel: ObservableObject {
     @Published private(set) var loadState: UsageLoadState = .idle
     @Published private(set) var pollingInterval: PollingInterval
     @Published private(set) var menuBarDisplayMode: MenuBarDisplayMode
-    @Published private(set) var menuBarColorMode: MenuBarColorMode
+    @Published private(set) var menuBarColorMode: UsageColorMode
+    @Published private(set) var meterColorMode: UsageColorMode
+    @Published private(set) var remainingLabelColorMode: UsageColorMode
     @Published private(set) var limitNotificationThreshold: NotificationThreshold?
     @Published private(set) var resetNotificationsEnabled: Bool
+    @Published private(set) var pollOnMenuOpen: Bool
+    @Published private(set) var launchAtLoginEnabled: Bool
+    @Published private(set) var settingsErrorMessage: String?
 
     private let usageService: UsageFetching
     private let preferencesStore: PreferencesStore
     private let appLauncher: AppLaunching
     private let notificationService: NotificationScheduling
+    private let loginItemService: LoginItemManaging
     private let wakeNotificationCenter: NotificationCenter
     private let now: @Sendable () -> Date
 
@@ -31,6 +37,7 @@ final class UsageViewModel: ObservableObject {
         preferencesStore: PreferencesStore,
         appLauncher: AppLaunching,
         notificationService: NotificationScheduling,
+        loginItemService: LoginItemManaging,
         wakeNotificationCenter: NotificationCenter = NSWorkspace.shared.notificationCenter,
         now: @escaping @Sendable () -> Date = Date.init
     ) {
@@ -38,13 +45,19 @@ final class UsageViewModel: ObservableObject {
         self.preferencesStore = preferencesStore
         self.appLauncher = appLauncher
         self.notificationService = notificationService
+        self.loginItemService = loginItemService
         self.wakeNotificationCenter = wakeNotificationCenter
         self.now = now
         self.pollingInterval = preferencesStore.pollingInterval
         self.menuBarDisplayMode = preferencesStore.menuBarDisplayMode
         self.menuBarColorMode = preferencesStore.menuBarColorMode
+        self.meterColorMode = preferencesStore.meterColorMode
+        self.remainingLabelColorMode = preferencesStore.remainingLabelColorMode
         self.limitNotificationThreshold = preferencesStore.limitNotificationThreshold
         self.resetNotificationsEnabled = preferencesStore.resetNotificationsEnabled
+        self.pollOnMenuOpen = preferencesStore.pollOnMenuOpen
+        self.launchAtLoginEnabled = loginItemService.isEnabled()
+        preferencesStore.launchAtLoginEnabled = launchAtLoginEnabled
     }
 
     deinit {
@@ -83,6 +96,14 @@ final class UsageViewModel: ObservableObject {
         }
     }
 
+    func canRefreshNow(at date: Date = Date()) -> Bool {
+        guard let snapshot else {
+            return true
+        }
+
+        return date.timeIntervalSince(snapshot.lastUpdated) >= 60
+    }
+
     func start() {
         guard didStart == false else {
             return
@@ -95,6 +116,10 @@ final class UsageViewModel: ObservableObject {
     }
 
     func menuOpened() {
+        guard pollOnMenuOpen else {
+            return
+        }
+
         requestRefresh()
     }
 
@@ -113,9 +138,44 @@ final class UsageViewModel: ObservableObject {
         preferencesStore.menuBarDisplayMode = mode
     }
 
-    func selectMenuBarColorMode(_ mode: MenuBarColorMode) {
+    func selectMenuBarColorMode(_ mode: UsageColorMode) {
         menuBarColorMode = mode
         preferencesStore.menuBarColorMode = mode
+    }
+
+    func selectMeterColorMode(_ mode: UsageColorMode) {
+        meterColorMode = mode
+        preferencesStore.meterColorMode = mode
+    }
+
+    func selectRemainingLabelColorMode(_ mode: UsageColorMode) {
+        remainingLabelColorMode = mode
+        preferencesStore.remainingLabelColorMode = mode
+    }
+
+    func setPollOnMenuOpen(_ isEnabled: Bool) {
+        pollOnMenuOpen = isEnabled
+        preferencesStore.pollOnMenuOpen = isEnabled
+    }
+
+    func setLaunchAtLoginEnabled(_ isEnabled: Bool) {
+        let previousValue = launchAtLoginEnabled
+        launchAtLoginEnabled = isEnabled
+        settingsErrorMessage = nil
+
+        do {
+            try loginItemService.setEnabled(isEnabled)
+            launchAtLoginEnabled = loginItemService.isEnabled()
+            preferencesStore.launchAtLoginEnabled = launchAtLoginEnabled
+        } catch {
+            launchAtLoginEnabled = previousValue
+            preferencesStore.launchAtLoginEnabled = previousValue
+            settingsErrorMessage = "Could not update launch at login."
+        }
+    }
+
+    func clearSettingsErrorMessage() {
+        settingsErrorMessage = nil
     }
 
     func selectNotificationThreshold(_ threshold: NotificationThreshold?) {
@@ -279,3 +339,17 @@ final class UsageViewModel: ObservableObject {
         }
     }
 }
+
+#if DEBUG
+extension UsageViewModel {
+    func applyPreviewSnapshot(_ snapshot: UsageSnapshot) {
+        self.snapshot = snapshot
+        loadState = .loaded
+    }
+
+    func applyPreviewFailure(_ message: String) {
+        snapshot = nil
+        loadState = .failed(message: message)
+    }
+}
+#endif
