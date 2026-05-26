@@ -25,7 +25,7 @@ You can either [download the binary](https://github.com/Qrivi/CodexMeter/release
 
 ```sh
 brew tap qrivi/tap
-brew install qrivi/tap/codexmeter
+brew install --cask qrivi/tap/codexmeter
 ```
 
 ## Development
