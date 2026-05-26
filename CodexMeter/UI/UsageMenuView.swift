@@ -1,13 +1,15 @@
+import AppKit
 import SwiftUI
 
 struct UsageMenuView: View {
     @ObservedObject var viewModel: UsageViewModel
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading) {
             content
         }
-        .padding(16)
+        .padding(6)
         .frame(width: 340)
         .onAppear {
             viewModel.menuOpened()
@@ -26,35 +28,30 @@ struct UsageMenuView: View {
             }
         }
 
-        Divider()
-
         statusSection
+        
+        Divider()
+        
         actionSection
 
         Divider()
 
-        settingsSection
-
-        Divider()
-
-        MenuRowButton("Quit", systemImage: "power", role: .destructive) {
-            viewModel.quit()
-        }
+        appSection
     }
 
     private func usageSections(snapshot: UsageSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 20) {
             UsageSectionView(section: snapshot.fiveHourSection)
-            Divider()
             UsageSectionView(section: snapshot.weeklySection)
-            Divider()
-            VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
                 Text("Credits remaining")
                     .font(.headline)
+                Spacer()
                 Text(snapshot.creditsText)
                     .font(.body.monospacedDigit())
             }
-        }.padding(.vertical, 5)
+        }
+        .padding(10)
     }
 
     @ViewBuilder
@@ -71,12 +68,12 @@ struct UsageMenuView: View {
                         .foregroundStyle(.red)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-            }
+            }.padding(.horizontal, 10)
         }
     }
 
     private var actionSection: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        MenuRowSection {
             MenuRowButton("Refresh Now", systemImage: "arrow.clockwise") {
                 viewModel.refreshNow()
             }
@@ -91,100 +88,31 @@ struct UsageMenuView: View {
         }
     }
 
-    private var settingsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            settingPicker(
-                title: "Polling Rate",
-                selection: pollingIntervalBinding,
-                options: PollingInterval.allCases,
-                label: \.title
-            )
-
-            settingPicker(
-                title: "Show in Menu Bar",
-                selection: menuBarDisplayModeBinding,
-                options: MenuBarDisplayMode.allCases,
-                label: \.menuTitle
-            )
-
-            settingPicker(
-                title: "Menu Bar Color",
-                selection: menuBarColorModeBinding,
-                options: MenuBarColorMode.allCases,
-                label: \.menuTitle
-            )
-
-            settingPicker(
-                title: "Low Usage Notification",
-                selection: notificationThresholdBinding,
-                options: [nil] + NotificationThreshold.allCases.map(Optional.some),
-                label: { threshold in threshold?.title ?? "Off" }
-            )
-
-            Toggle("Notify when limit resets", isOn: resetNotificationsBinding)
-                .toggleStyle(.checkbox)
-                .font(.subheadline)
-        }
-    }
-
-    private func settingPicker<Value: Hashable>(
-        title: String,
-        selection: Binding<Value>,
-        options: [Value],
-        label: @escaping (Value) -> String
-    ) -> some View {
-        HStack {
-            Text(title)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            Spacer()
-
-            Picker(title, selection: selection) {
-                ForEach(options, id: \.self) { option in
-                    Text(label(option))
-                        .tag(option)
-                }
+    private var appSection: some View {
+        MenuRowSection {
+            MenuRowButton("Settings", systemImage: "gearshape", shortcut: "⌘,") {
+                openSettings()
+                NSApp.activate(ignoringOtherApps: true)
             }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .controlSize(.small)
+
+            MenuRowButton("Quit", systemImage: "power", shortcut: "⌘Q") {
+                viewModel.quit()
+            }
         }
     }
+}
 
-    private var pollingIntervalBinding: Binding<PollingInterval> {
-        Binding(
-            get: { viewModel.pollingInterval },
-            set: { viewModel.selectPollingInterval($0) }
-        )
+private struct MenuRowSection<Content: View>: View {
+    let content: () -> Content
+
+    init(@ViewBuilder content: @escaping () -> Content) {
+        self.content = content
     }
 
-    private var menuBarDisplayModeBinding: Binding<MenuBarDisplayMode> {
-        Binding(
-            get: { viewModel.menuBarDisplayMode },
-            set: { viewModel.selectMenuBarDisplayMode($0) }
-        )
-    }
-
-    private var menuBarColorModeBinding: Binding<MenuBarColorMode> {
-        Binding(
-            get: { viewModel.menuBarColorMode },
-            set: { viewModel.selectMenuBarColorMode($0) }
-        )
-    }
-
-    private var notificationThresholdBinding: Binding<NotificationThreshold?> {
-        Binding(
-            get: { viewModel.limitNotificationThreshold },
-            set: { viewModel.selectNotificationThreshold($0) }
-        )
-    }
-
-    private var resetNotificationsBinding: Binding<Bool> {
-        Binding(
-            get: { viewModel.resetNotificationsEnabled },
-            set: { viewModel.setResetNotificationsEnabled($0) }
-        )
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            content()
+        }
     }
 }
 
@@ -195,14 +123,14 @@ private struct MessageView: View {
         Text(message)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 12)
+            .padding(16)
     }
 }
 
 private struct MenuRowButton: View {
     let title: String
     let systemImage: String
-    let role: ButtonRole?
+    let shortcut: String?
     let action: () -> Void
 
     @State private var isHovering = false
@@ -210,25 +138,39 @@ private struct MenuRowButton: View {
     init(
         _ title: String,
         systemImage: String,
-        role: ButtonRole? = nil,
+        shortcut: String? = nil,
         action: @escaping () -> Void
     ) {
         self.title = title
         self.systemImage = systemImage
-        self.role = role
+        self.shortcut = shortcut
         self.action = action
     }
 
     var body: some View {
-        Button(role: role, action: action) {
-            Label(title, systemImage: systemImage)
-            .font(.subheadline)
-            .labelStyle(.titleAndIcon)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
+        Button {
+            action()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.body)
+                    .frame(width: 16, alignment: .center)
+
+                Text(title)
+
+                Spacer(minLength: 0)
+
+                if let shortcut {
+                    Text(shortcut)
+                        .foregroundStyle(shortcutForegroundStyle)
+                }
+            }
+            .font(.body)
+            .padding(horizontal: 6, vertical: 4)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .focusable(false)
         .foregroundStyle(foregroundStyle)
         .background {
             if isHovering {
@@ -236,7 +178,6 @@ private struct MenuRowButton: View {
                     .fill(Color.accentColor)
             }
         }
-        .contentShape(Rectangle())
         .onHover { isHovering = $0 }
     }
 
@@ -245,11 +186,15 @@ private struct MenuRowButton: View {
             return .white
         }
 
-        if role == .destructive {
-            return .red
+        return .primary
+    }
+
+    private var shortcutForegroundStyle: Color {
+        if isHovering {
+            return .white
         }
 
-        return .primary
+        return .secondary
     }
 }
 
