@@ -11,20 +11,20 @@ enum MenuRowID: Hashable {
 struct MenuActionDescriptor: Identifiable, Equatable {
     let id: MenuRowID
     let title: String
-    let icon: MenuActionIcon
+    let icon: MenuActionIcon?
     let shortcut: String?
     let keepsMenuOpenAfterActivation: Bool
 
     init(
         id: MenuRowID,
         title: String,
-        systemImage: String,
+        systemImage: String?,
         shortcut: String? = nil,
         keepsMenuOpenAfterActivation: Bool = false
     ) {
         self.id = id
         self.title = title
-        self.icon = .system(systemImage)
+        self.icon = systemImage.map(MenuActionIcon.system)
         self.shortcut = shortcut
         self.keepsMenuOpenAfterActivation = keepsMenuOpenAfterActivation
     }
@@ -32,13 +32,13 @@ struct MenuActionDescriptor: Identifiable, Equatable {
     init(
         id: MenuRowID,
         title: String,
-        assetImage: String,
+        assetImage: String?,
         shortcut: String? = nil,
         keepsMenuOpenAfterActivation: Bool = false
     ) {
         self.id = id
         self.title = title
-        self.icon = .asset(assetImage)
+        self.icon = assetImage.map(MenuActionIcon.asset)
         self.shortcut = shortcut
         self.keepsMenuOpenAfterActivation = keepsMenuOpenAfterActivation
     }
@@ -62,8 +62,8 @@ enum MenuActionCatalog {
     ]
 
     static let appActions = [
-        MenuActionDescriptor(id: .settings, title: "Settings", systemImage: "gear", shortcut: "⌘ ,"),
-        MenuActionDescriptor(id: .quit, title: "Quit CodexMeter", systemImage: "xmark.rectangle", shortcut: "⌘ Q")
+        MenuActionDescriptor(id: .settings, title: "Settings", systemImage: MacOSRelease.isSequoia ? nil : "gear", shortcut: "⌘ ,"),
+        MenuActionDescriptor(id: .quit, title: "Quit CodexMeter", systemImage: MacOSRelease.isSequoia ? nil : "xmark.rectangle", shortcut: "⌘ Q")
     ]
 
     static let rows = usageActions.map(\.id) + appActions.map(\.id)

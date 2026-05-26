@@ -9,7 +9,7 @@ struct UsageMenuView: View {
         VStack(alignment: .leading) {
             content
         }
-        .padding(6)
+        .padding(MacOSRelease.isSequoia ? 4 : 6)
         .frame(width: 340)
         .onAppear {
             viewModel.menuOpened()

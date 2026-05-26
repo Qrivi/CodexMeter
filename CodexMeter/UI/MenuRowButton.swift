@@ -41,9 +41,11 @@ struct MenuRowButton: View {
             perform()
         } label: {
             HStack(alignment: .center, spacing: 6) {
-                actionIcon
-                    .frame(width: 16, alignment: .center)
-                    .padding(.leading, 2)
+                if let icon = action.icon {
+                    actionIcon(icon)
+                        .frame(width: 16, alignment: .center)
+                        .padding(.leading, 2)
+                }
 
                 Text(action.title)
 
@@ -55,7 +57,7 @@ struct MenuRowButton: View {
                 }
             }
             .font(.body)
-            .padding(.horizontal, MacOSRelease.isSequoia ? 4 : 10)
+            .padding(.horizontal, 10)
             .padding(.vertical, 4)
             .contentShape(Rectangle())
         }
@@ -93,18 +95,20 @@ struct MenuRowButton: View {
     }
 
     @ViewBuilder
-    private var actionIcon: some View {
-        switch action.icon {
+    private func actionIcon(_ icon: MenuActionIcon) -> some View {
+        let size: CGFloat = MacOSRelease.isSequoia ? 15 : 13;
+        
+        switch icon {
         case .system(let systemImage):
             Image(systemName: systemImage)
                 .font(.body)
-                .imageScale(.small)
+                .imageScale(MacOSRelease.isSequoia ? .medium : .small)
         case .asset(let assetImage):
             Image(assetImage)
                 .resizable()
                 .renderingMode(.template)
                 .scaledToFit()
-                .frame(width: 13, height: 13)
+                .frame(width: size, height: size)
         }
     }
 

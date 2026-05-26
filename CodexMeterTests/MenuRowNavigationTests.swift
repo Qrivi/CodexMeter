@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import CodexMeter
 
@@ -15,6 +16,27 @@ struct MenuRowNavigationTests {
         #expect(MenuActionCatalog.rowsByID[.codexApp]?.keepsMenuOpenAfterActivation == false)
         #expect(MenuActionCatalog.rowsByID[.settings]?.keepsMenuOpenAfterActivation == false)
         #expect(MenuActionCatalog.rowsByID[.quit]?.keepsMenuOpenAfterActivation == false)
+    }
+
+    @Test
+    func hidesSettingsAndQuitIconsOnSequoia() throws {
+        let sequoia = OperatingSystemVersion(majorVersion: 15, minorVersion: 7, patchVersion: 2)
+        let appActions = Dictionary(uniqueKeysWithValues: MenuActionCatalog.appActions(on: sequoia).map { ($0.id, $0) })
+
+        #expect(try #require(MenuActionCatalog.rowsByID[.refresh]).icon != nil)
+        #expect(try #require(MenuActionCatalog.rowsByID[.dashboard]).icon != nil)
+        #expect(try #require(MenuActionCatalog.rowsByID[.codexApp]).icon != nil)
+        #expect(try #require(appActions[.settings]).icon == nil)
+        #expect(try #require(appActions[.quit]).icon == nil)
+    }
+
+    @Test
+    func keepsSettingsAndQuitIconsOnNonSequoiaReleases() throws {
+        let tahoe = OperatingSystemVersion(majorVersion: 26, minorVersion: 0, patchVersion: 0)
+        let appActions = Dictionary(uniqueKeysWithValues: MenuActionCatalog.appActions(on: tahoe).map { ($0.id, $0) })
+
+        #expect(try #require(appActions[.settings]).icon != nil)
+        #expect(try #require(appActions[.quit]).icon != nil)
     }
 
     @Test
