@@ -62,8 +62,8 @@ enum MenuActionCatalog {
     ]
 
     static let appActions = [
-        MenuActionDescriptor(id: .settings, title: "Settings", systemImage: "gearshape", shortcut: "⌘ ,"),
-        MenuActionDescriptor(id: .quit, title: "Quit", systemImage: "power", shortcut: "⌘ Q")
+        MenuActionDescriptor(id: .settings, title: "Settings", systemImage: "gear", shortcut: "⌘ ,"),
+        MenuActionDescriptor(id: .quit, title: "Quit CodexMeter", systemImage: "xmark.rectangle", shortcut: "⌘ Q")
     ]
 
     static let rows = usageActions.map(\.id) + appActions.map(\.id)

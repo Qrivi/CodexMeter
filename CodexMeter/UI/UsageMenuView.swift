@@ -22,15 +22,20 @@ struct UsageMenuView: View {
             if let snapshot = viewModel.snapshot {
                 usageSections(snapshot: snapshot)
             } else if let message = viewModel.currentFailureMessage {
-                MessageView(message: message)
+                Text(message)
+                    .foregroundStyle(.secondary)
+                    .padding(12)
             } else {
-                MessageView(message: "Loading…")
+                Text("Loading…")
+                    .foregroundStyle(.secondary)
+                    .padding(12)
             }
         }
 
         statusSection
 
         Divider()
+            .padding(.horizontal, 11)
 
         TimelineView(.periodic(from: Date(), by: 1)) { context in
             UsageMenuActionsView(
@@ -64,7 +69,8 @@ struct UsageMenuView: View {
                     .font(.body.monospacedDigit())
             }
         }
-        .padding(10)
+        .padding(.horizontal, MacOSRelease.isSequoia ? 10 : 12)
+        .padding(.vertical, 10)
     }
 
     @ViewBuilder
@@ -81,24 +87,13 @@ struct UsageMenuView: View {
                         .foregroundStyle(.red)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-            }.padding(.horizontal, 10)
+            }.padding(.horizontal, MacOSRelease.isSequoia ? 10 : 12)
         }
     }
 
     private func openSettingsWindow() {
         openWindow(id: "settings")
         NSApp.activate(ignoringOtherApps: true)
-    }
-}
-
-private struct MessageView: View {
-    let message: String
-
-    var body: some View {
-        Text(message)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
     }
 }
 

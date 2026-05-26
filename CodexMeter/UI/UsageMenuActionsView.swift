@@ -18,6 +18,7 @@ struct UsageMenuActionsView: View {
             actionSection
 
             Divider()
+                .padding(.horizontal, 11)
 
             appSection
         }

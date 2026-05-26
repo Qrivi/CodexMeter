@@ -40,7 +40,7 @@ struct MenuRowButton: View {
             selectedRow = action.id
             perform()
         } label: {
-            HStack(spacing: 8) {
+            HStack(alignment: .center, spacing: 6) {
                 actionIcon
                     .frame(width: 16, alignment: .center)
                     .padding(.leading, 2)
@@ -55,7 +55,8 @@ struct MenuRowButton: View {
                 }
             }
             .font(.body)
-            .padding(4)
+            .padding(.horizontal, MacOSRelease.isSequoia ? 4 : 10)
+            .padding(.vertical, 4)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -65,7 +66,7 @@ struct MenuRowButton: View {
         .opacity(isEnabled ? 1 : 0.45)
         .background {
             if isHighlighted {
-                RoundedRectangle(cornerRadius: 5)
+                RoundedRectangle(cornerRadius: MacOSRelease.isSequoia ? 5 : 8)
                     .fill(Color.accentColor)
             }
         }
@@ -97,37 +98,38 @@ struct MenuRowButton: View {
         case .system(let systemImage):
             Image(systemName: systemImage)
                 .font(.body)
+                .imageScale(.small)
         case .asset(let assetImage):
             Image(assetImage)
                 .resizable()
                 .renderingMode(.template)
                 .scaledToFit()
-                .frame(width: 15, height: 15)
+                .frame(width: 13, height: 13)
         }
     }
 
-    private var foregroundStyle: Color {
+    private var foregroundStyle: AnyShapeStyle {
         guard isEnabled else {
-            return .secondary
+            return AnyShapeStyle(.secondary)
         }
 
         if isHighlighted {
-            return .white
+            return AnyShapeStyle(.white)
         }
 
-        return .primary
+        return AnyShapeStyle(.primary)
     }
 
-    private var shortcutForegroundStyle: Color {
+    private var shortcutForegroundStyle: AnyShapeStyle {
         guard isEnabled else {
-            return .secondary
+            return AnyShapeStyle(.tertiary)
         }
 
         if isHighlighted {
-            return .white
+            return AnyShapeStyle(.white)
         }
 
-        return .secondary
+        return AnyShapeStyle(.tertiary)
     }
 }
 
