@@ -13,20 +13,11 @@ extension UsageColorMode {
                 return .secondary
             }
 
-            return .red
+            return UsageStatusPalette.critical
         }
     }
 
     private func color(for level: UsageLevel) -> Color {
-        switch level {
-        case .good:
-            .green
-        case .warning:
-            .yellow
-        case .critical:
-            .red
-        case .neutral:
-            .secondary
-        }
+        UsageStatusPalette.color(for: level)
     }
 }

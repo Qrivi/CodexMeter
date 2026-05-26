@@ -15,7 +15,7 @@ struct GeneralSettingsPane: View {
                 if let message = viewModel.settingsErrorMessage {
                     Text(message)
                         .font(.footnote)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(UsageStatusPalette.critical)
                 }
             }
 

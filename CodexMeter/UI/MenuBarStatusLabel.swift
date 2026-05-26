@@ -63,16 +63,7 @@ private enum MenuBarLabelImage {
     }
 
     private static func color(for tone: MenuBarTextTone) -> NSColor {
-        switch tone {
-        case .neutral:
-            return .textColor
-        case .good:
-            return .systemGreen
-        case .warning:
-            return .systemYellow
-        case .critical:
-            return .systemRed
-        }
+        UsageStatusPalette.color(for: tone)
     }
 }
 

@@ -10,7 +10,7 @@ struct UsageMenuView: View {
             content
         }
         .padding(MacOSRelease.isSequoia ? 4 : 6)
-        .frame(width: 340)
+        .frame(width: 280)
         .onAppear {
             viewModel.menuOpened()
         }
@@ -84,7 +84,7 @@ struct UsageMenuView: View {
                 if let warningMessage = snapshot.warningMessage {
                     Text(warningMessage)
                         .font(.footnote)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(UsageStatusPalette.critical)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }.padding(.horizontal, MacOSRelease.isSequoia ? 10 : 12)
