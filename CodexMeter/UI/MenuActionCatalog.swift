@@ -11,7 +11,7 @@ enum MenuRowID: Hashable {
 struct MenuActionDescriptor: Identifiable, Equatable {
     let id: MenuRowID
     let title: String
-    let systemImage: String
+    let icon: MenuActionIcon
     let shortcut: String?
     let keepsMenuOpenAfterActivation: Bool
 
@@ -24,10 +24,29 @@ struct MenuActionDescriptor: Identifiable, Equatable {
     ) {
         self.id = id
         self.title = title
-        self.systemImage = systemImage
+        self.icon = .system(systemImage)
         self.shortcut = shortcut
         self.keepsMenuOpenAfterActivation = keepsMenuOpenAfterActivation
     }
+
+    init(
+        id: MenuRowID,
+        title: String,
+        assetImage: String,
+        shortcut: String? = nil,
+        keepsMenuOpenAfterActivation: Bool = false
+    ) {
+        self.id = id
+        self.title = title
+        self.icon = .asset(assetImage)
+        self.shortcut = shortcut
+        self.keepsMenuOpenAfterActivation = keepsMenuOpenAfterActivation
+    }
+}
+
+enum MenuActionIcon: Equatable {
+    case system(String)
+    case asset(String)
 }
 
 enum MenuActionCatalog {
@@ -39,7 +58,7 @@ enum MenuActionCatalog {
             keepsMenuOpenAfterActivation: true
         ),
         MenuActionDescriptor(id: .dashboard, title: "Open Usage Dashboard", systemImage: "chart.bar"),
-        MenuActionDescriptor(id: .codexApp, title: "Open Codex App", systemImage: "app")
+        MenuActionDescriptor(id: .codexApp, title: "Open Codex App", assetImage: "CodexLogo")
     ]
 
     static let appActions = [

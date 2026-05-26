@@ -41,8 +41,7 @@ struct MenuRowButton: View {
             perform()
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: action.systemImage)
-                    .font(.body)
+                actionIcon
                     .frame(width: 16, alignment: .center)
                     .padding(.leading, 2)
 
@@ -90,6 +89,21 @@ struct MenuRowButton: View {
         }
 
         return hoveredRow == action.id
+    }
+
+    @ViewBuilder
+    private var actionIcon: some View {
+        switch action.icon {
+        case .system(let systemImage):
+            Image(systemName: systemImage)
+                .font(.body)
+        case .asset(let assetImage):
+            Image(assetImage)
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
+                .frame(width: 15, height: 15)
+        }
     }
 
     private var foregroundStyle: Color {
