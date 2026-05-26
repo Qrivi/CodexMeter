@@ -54,3 +54,23 @@ struct RemainingLabelColorPreview: View {
         .padding(.leading, 2)
     }
 }
+
+#if DEBUG
+struct SettingsPreviewComponents_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            MenuBarColorPreview(colorMode: .colorfulWhenLow)
+                .padding()
+                .previewDisplayName("Menu Bar Color Preview")
+
+            MeterColorPreview(colorMode: .colorful)
+                .padding()
+                .previewDisplayName("Meter Color Preview")
+
+            RemainingLabelColorPreview(colorMode: .colorfulWhenLow)
+                .padding()
+                .previewDisplayName("Remaining Label Color Preview")
+        }
+    }
+}
+#endif

@@ -127,3 +127,35 @@ struct UsageMenuActionsView: View {
         }
     }
 }
+
+#if DEBUG
+struct UsageMenuActionsView_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            UsageMenuActionsView(
+                isRefreshEnabled: true,
+                refresh: {},
+                openUsageDashboard: {},
+                openCodex: {},
+                openSettings: {},
+                quit: {}
+            )
+            .padding(6)
+            .frame(width: 340)
+            .previewDisplayName("Usage Menu Actions")
+
+            UsageMenuActionsView(
+                isRefreshEnabled: false,
+                refresh: {},
+                openUsageDashboard: {},
+                openCodex: {},
+                openSettings: {},
+                quit: {}
+            )
+            .padding(6)
+            .frame(width: 340)
+            .previewDisplayName("Usage Menu Actions Disabled Refresh")
+        }
+    }
+}
+#endif

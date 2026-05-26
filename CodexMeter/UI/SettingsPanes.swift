@@ -215,3 +215,27 @@ struct AboutSettingsPane: View {
         }
     }
 }
+
+#if DEBUG
+struct SettingsPanes_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            GeneralSettingsPane(viewModel: PreviewSupport.viewModel())
+                .frame(width: 520, height: 360)
+                .previewDisplayName("General Settings")
+
+            AppearanceSettingsPane(viewModel: PreviewSupport.viewModel())
+                .frame(width: 520, height: 520)
+                .previewDisplayName("Appearance Settings")
+
+            NotificationSettingsPane(viewModel: PreviewSupport.viewModel())
+                .frame(width: 520, height: 280)
+                .previewDisplayName("Notification Settings")
+
+            AboutSettingsPane()
+                .frame(width: 520, height: 280)
+                .previewDisplayName("About Settings")
+        }
+    }
+}
+#endif

@@ -2,14 +2,14 @@ import AppKit
 import SwiftUI
 
 struct CodexMeterCommands: Commands {
-    @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
 
     let quit: () -> Void
 
     var body: some Commands {
         CommandGroup(replacing: .appSettings) {
             Button("Settings...") {
-                openSettings()
+                openWindow(id: "settings")
                 NSApp.activate(ignoringOtherApps: true)
             }
             .keyboardShortcut(",", modifiers: .command)

@@ -75,3 +75,13 @@ private enum MenuBarLabelImage {
         }
     }
 }
+
+#if DEBUG
+struct MenuBarStatusLabel_Previews: PreviewProvider {
+    static var previews: some View {
+        MenuBarStatusLabel(viewModel: PreviewSupport.viewModel())
+            .padding()
+            .previewDisplayName("Menu Bar Status Label")
+    }
+}
+#endif

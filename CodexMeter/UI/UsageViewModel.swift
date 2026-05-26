@@ -339,3 +339,17 @@ final class UsageViewModel: ObservableObject {
         }
     }
 }
+
+#if DEBUG
+extension UsageViewModel {
+    func applyPreviewSnapshot(_ snapshot: UsageSnapshot) {
+        self.snapshot = snapshot
+        loadState = .loaded
+    }
+
+    func applyPreviewFailure(_ message: String) {
+        snapshot = nil
+        loadState = .failed(message: message)
+    }
+}
+#endif

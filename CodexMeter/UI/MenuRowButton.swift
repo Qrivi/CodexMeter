@@ -116,3 +116,38 @@ struct MenuRowButton: View {
         return .secondary
     }
 }
+
+#if DEBUG
+private struct MenuRowButtonPreview: View {
+    @State private var selectedRow: MenuRowID? = .settings
+    @State private var hoveredRow: MenuRowID?
+
+    var body: some View {
+        MenuRowSection {
+            MenuRowButton(
+                MenuActionCatalog.rowsByID[.settings]!,
+                selectedRow: $selectedRow,
+                hoveredRow: $hoveredRow,
+                perform: {}
+            )
+
+            MenuRowButton(
+                MenuActionCatalog.rowsByID[.refresh]!,
+                selectedRow: $selectedRow,
+                hoveredRow: $hoveredRow,
+                isEnabled: false,
+                perform: {}
+            )
+        }
+        .padding(6)
+        .frame(width: 340)
+    }
+}
+
+struct MenuRowButton_Previews: PreviewProvider {
+    static var previews: some View {
+        MenuRowButtonPreview()
+            .previewDisplayName("Menu Row Button")
+    }
+}
+#endif

@@ -111,3 +111,42 @@ private struct SettingsRowLabel: View {
         }
     }
 }
+
+#if DEBUG
+private struct SettingsControlsPreview: View {
+    @State private var colorMode: UsageColorMode = .colorfulWhenLow
+    @State private var isEnabled = true
+
+    var body: some View {
+        SettingsPaneContainer {
+            Section("Picker") {
+                SettingsPickerRow(
+                    title: "Menu bar colors",
+                    description: "Control how compact menu bar numbers use warning colors.",
+                    selection: $colorMode,
+                    options: UsageColorMode.allCases,
+                    label: \.menuTitle
+                ) {
+                    MenuBarColorPreview(colorMode: colorMode)
+                }
+            }
+
+            Section("Toggle") {
+                SettingsToggleRow(
+                    title: "Poll when menu opens",
+                    description: "Refresh immediately when opening the menu bar window.",
+                    isOn: $isEnabled
+                )
+            }
+        }
+        .frame(width: 520, height: 320)
+    }
+}
+
+struct SettingsControls_Previews: PreviewProvider {
+    static var previews: some View {
+        SettingsControlsPreview()
+            .previewDisplayName("Settings Controls")
+    }
+}
+#endif

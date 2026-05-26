@@ -3,7 +3,7 @@ import SwiftUI
 
 struct UsageMenuView: View {
     @ObservedObject var viewModel: UsageViewModel
-    @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -86,7 +86,7 @@ struct UsageMenuView: View {
     }
 
     private func openSettingsWindow() {
-        openSettings()
+        openWindow(id: "settings")
         NSApp.activate(ignoringOtherApps: true)
     }
 }
@@ -136,3 +136,28 @@ private struct UsageSectionView: View {
         }
     }
 }
+
+#if DEBUG
+struct UsageMenuView_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            UsageMenuView(viewModel: PreviewSupport.viewModel())
+                .frame(width: 340)
+                .previewDisplayName("Usage Menu")
+
+            UsageMenuView(viewModel: PreviewSupport.failingViewModel())
+                .frame(width: 340)
+                .previewDisplayName("Usage Menu Error")
+
+            UsageSectionView(
+                section: PreviewSupport.snapshot.weeklySection,
+                meterColorMode: .colorful,
+                remainingLabelColorMode: .colorfulWhenLow
+            )
+            .padding()
+            .frame(width: 340)
+            .previewDisplayName("Usage Section")
+        }
+    }
+}
+#endif
