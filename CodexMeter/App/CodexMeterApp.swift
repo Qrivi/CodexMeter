@@ -31,7 +31,7 @@ struct CodexMeterApp: App {
             CodexMeterCommands(quit: viewModel.quit)
         }
 
-        WindowGroup("CodexMeter Settings", id: "settings") {
+        Window("CodexMeter Settings", id: "settings") {
             SettingsView(viewModel: viewModel)
         }
         .windowResizability(.contentSize)
