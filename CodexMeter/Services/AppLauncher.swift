@@ -30,10 +30,8 @@ struct AppLauncher: AppLaunching {
         }
 
         self.applicationOpener = { url in
-            await withCheckedContinuation { continuation in
-                workspace.openApplication(at: url, configuration: .init()) { _, error in
-                    continuation.resume(returning: error == nil)
-                }
+            await MainActor.run {
+                workspace.open(url)
             }
         }
     }

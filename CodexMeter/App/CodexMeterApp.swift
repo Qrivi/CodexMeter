@@ -25,7 +25,7 @@ struct CodexMeterApp: App {
         } label: {
             MenuBarStatusLabel(viewModel: viewModel)
         }
-        .menuBarExtraStyle(.menu)
+        .menuBarExtraStyle(.window)
     }
 }
 
