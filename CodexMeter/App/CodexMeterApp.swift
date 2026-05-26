@@ -13,7 +13,8 @@ struct CodexMeterApp: App {
             usageService: UsageService(tokenProvider: AuthTokenProvider()),
             preferencesStore: preferencesStore,
             appLauncher: AppLauncher(),
-            notificationService: NotificationService()
+            notificationService: NotificationService(),
+            loginItemService: LoginItemService()
         )
         viewModel.start()
         _viewModel = StateObject(wrappedValue: viewModel)

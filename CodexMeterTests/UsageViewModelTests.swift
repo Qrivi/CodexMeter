@@ -157,6 +157,130 @@ struct UsageViewModelTests {
 
     @MainActor
     @Test
+    func persistsInAppAppearanceColorModes() {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        let store = PreferencesStore(userDefaults: defaults)
+        let viewModel = makeViewModel(service: MockUsageFetcher(results: [.success(makeSnapshot())]), preferencesStore: store)
+
+        viewModel.selectMeterColorMode(.monochrome)
+        viewModel.selectRemainingLabelColorMode(.colorful)
+
+        #expect(viewModel.meterColorMode == .monochrome)
+        #expect(viewModel.remainingLabelColorMode == .colorful)
+        #expect(store.meterColorMode == .monochrome)
+        #expect(store.remainingLabelColorMode == .colorful)
+    }
+
+    @MainActor
+    @Test
+    func menuOpenedRefreshesWhenPollOnMenuOpenIsEnabled() async throws {
+        let tracker = RefreshTracker()
+        let service = BlockingUsageFetcher(tracker: tracker, snapshot: makeSnapshot())
+        let viewModel = makeViewModel(service: service)
+
+        viewModel.menuOpened()
+        await tracker.waitUntilCalled()
+
+        #expect(await tracker.callCount == 1)
+        await tracker.resume()
+        try await waitUntil { viewModel.loadState == .loaded }
+    }
+
+    @MainActor
+    @Test
+    func menuOpenedDoesNotRefreshWhenPollOnMenuOpenIsDisabled() async throws {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        let store = PreferencesStore(userDefaults: defaults)
+        store.pollOnMenuOpen = false
+        let tracker = RefreshTracker()
+        let service = BlockingUsageFetcher(tracker: tracker, snapshot: makeSnapshot())
+        let viewModel = makeViewModel(service: service, preferencesStore: store)
+
+        viewModel.menuOpened()
+        try await Task.sleep(for: .milliseconds(50))
+
+        #expect(await tracker.callCount == 0)
+        #expect(viewModel.pollOnMenuOpen == false)
+    }
+
+    @MainActor
+    @Test
+    func persistsPollOnMenuOpenPreference() {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        let store = PreferencesStore(userDefaults: defaults)
+        let viewModel = makeViewModel(service: MockUsageFetcher(results: [.success(makeSnapshot())]), preferencesStore: store)
+
+        viewModel.setPollOnMenuOpen(false)
+
+        #expect(viewModel.pollOnMenuOpen == false)
+        #expect(store.pollOnMenuOpen == false)
+    }
+
+    @MainActor
+    @Test
+    func readsLaunchAtLoginStatusOnInit() {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        let store = PreferencesStore(userDefaults: defaults)
+        let loginItemService = MockLoginItemService(isEnabled: true)
+
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(makeSnapshot())]),
+            preferencesStore: store,
+            loginItemService: loginItemService
+        )
+
+        #expect(viewModel.launchAtLoginEnabled)
+        #expect(store.launchAtLoginEnabled)
+    }
+
+    @MainActor
+    @Test
+    func launchAtLoginTogglePersistsOnSuccess() {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        let store = PreferencesStore(userDefaults: defaults)
+        let loginItemService = MockLoginItemService(isEnabled: false)
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(makeSnapshot())]),
+            preferencesStore: store,
+            loginItemService: loginItemService
+        )
+
+        viewModel.setLaunchAtLoginEnabled(true)
+
+        #expect(viewModel.launchAtLoginEnabled)
+        #expect(store.launchAtLoginEnabled)
+        #expect(loginItemService.requestedValues == [true])
+        #expect(viewModel.settingsErrorMessage == nil)
+    }
+
+    @MainActor
+    @Test
+    func launchAtLoginToggleRevertsOnFailure() {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        let store = PreferencesStore(userDefaults: defaults)
+        let loginItemService = MockLoginItemService(isEnabled: false, shouldFail: true)
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(makeSnapshot())]),
+            preferencesStore: store,
+            loginItemService: loginItemService
+        )
+
+        viewModel.setLaunchAtLoginEnabled(true)
+
+        #expect(viewModel.launchAtLoginEnabled == false)
+        #expect(store.launchAtLoginEnabled == false)
+        #expect(loginItemService.requestedValues == [true])
+        #expect(viewModel.settingsErrorMessage == "Could not update launch at login.")
+    }
+
+    @MainActor
+    @Test
     func persistsResetNotificationSettingAndRequestsPermission() async throws {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)

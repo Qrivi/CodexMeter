@@ -130,6 +130,46 @@ struct MockAppLauncher: AppLaunching {
     func openCodex() async -> Bool { true }
 }
 
+final class MockLoginItemService: LoginItemManaging, @unchecked Sendable {
+    enum MockError: Error {
+        case failed
+    }
+
+    private let lock = NSLock()
+    private var isEnabledValue: Bool
+    private var shouldFailValue: Bool
+    private var setValues: [Bool] = []
+
+    init(isEnabled: Bool = false, shouldFail: Bool = false) {
+        self.isEnabledValue = isEnabled
+        self.shouldFailValue = shouldFail
+    }
+
+    var requestedValues: [Bool] {
+        lock.withLock {
+            setValues
+        }
+    }
+
+    func isEnabled() -> Bool {
+        lock.withLock {
+            isEnabledValue
+        }
+    }
+
+    func setEnabled(_ isEnabled: Bool) throws {
+        try lock.withLock {
+            setValues.append(isEnabled)
+
+            if shouldFailValue {
+                throw MockError.failed
+            }
+
+            isEnabledValue = isEnabled
+        }
+    }
+}
+
 func makeNotificationService(tracker: NotificationTracker) -> NotificationService {
     NotificationService(
         authorizationRequester: { true },
@@ -144,7 +184,8 @@ func makeNotificationService(tracker: NotificationTracker) -> NotificationServic
 func makeViewModel(
     service: UsageFetching,
     preferencesStore: PreferencesStore? = nil,
-    notificationService: NotificationScheduling = MockNotificationService()
+    notificationService: NotificationScheduling = MockNotificationService(),
+    loginItemService: LoginItemManaging = MockLoginItemService()
 ) -> UsageViewModel {
     let store = preferencesStore ?? PreferencesStore(userDefaults: UserDefaults(suiteName: UUID().uuidString)!)
     return UsageViewModel(
@@ -152,6 +193,7 @@ func makeViewModel(
         preferencesStore: store,
         appLauncher: MockAppLauncher(),
         notificationService: notificationService,
+        loginItemService: loginItemService,
         wakeNotificationCenter: NotificationCenter()
     )
 }

@@ -46,8 +46,16 @@ struct UsageMenuView: View {
 
     private func usageSections(snapshot: UsageSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 20) {
-            UsageSectionView(section: snapshot.fiveHourSection)
-            UsageSectionView(section: snapshot.weeklySection)
+            UsageSectionView(
+                section: snapshot.fiveHourSection,
+                meterColorMode: viewModel.meterColorMode,
+                remainingLabelColorMode: viewModel.remainingLabelColorMode
+            )
+            UsageSectionView(
+                section: snapshot.weeklySection,
+                meterColorMode: viewModel.meterColorMode,
+                remainingLabelColorMode: viewModel.remainingLabelColorMode
+            )
             HStack(alignment: .firstTextBaseline) {
                 Text("Credits remaining")
                     .font(.headline)
@@ -96,6 +104,8 @@ private struct MessageView: View {
 
 private struct UsageSectionView: View {
     let section: UsageSectionViewData
+    let meterColorMode: UsageColorMode
+    let remainingLabelColorMode: UsageColorMode
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -107,12 +117,15 @@ private struct UsageSectionView: View {
 
                 Text(section.remainingText)
                     .font(.body.monospacedDigit())
-                    .foregroundStyle(color(for: section.level))
+                    .foregroundStyle(remainingLabelColorMode.color(
+                        level: section.level,
+                        remainingPercent: section.remainingPercent
+                    ))
             }
 
             if let remainingPercent = section.remainingPercent {
                 ProgressView(value: Double(remainingPercent), total: 100)
-                    .tint(color(for: section.level))
+                    .tint(meterColorMode.color(level: section.level, remainingPercent: remainingPercent))
             }
 
             if let resetText = section.resetText {
@@ -120,19 +133,6 @@ private struct UsageSectionView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-        }
-    }
-
-    private func color(for level: UsageLevel) -> Color {
-        switch level {
-        case .good:
-            .green
-        case .warning:
-            .yellow
-        case .critical:
-            .red
-        case .neutral:
-            .secondary
         }
     }
 }

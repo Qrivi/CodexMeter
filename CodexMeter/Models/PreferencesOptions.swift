@@ -63,7 +63,7 @@ enum MenuBarDisplayMode: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-enum MenuBarColorMode: String, CaseIterable, Identifiable, Sendable {
+enum UsageColorMode: String, CaseIterable, Identifiable, Sendable {
     case monochrome = "monochrome"
     case colorful = "colorful"
     case colorfulWhenLow = "colorful_when_low"

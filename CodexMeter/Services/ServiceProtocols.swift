@@ -27,3 +27,8 @@ protocol NotificationScheduling: Sendable {
         resetNotificationsEnabled: Bool
     ) async
 }
+
+protocol LoginItemManaging: Sendable {
+    func isEnabled() -> Bool
+    func setEnabled(_ isEnabled: Bool) throws
+}
