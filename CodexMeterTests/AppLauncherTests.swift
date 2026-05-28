@@ -78,7 +78,7 @@ struct AppLauncherTests {
         let success = await launcher.openCodex()
 
         #expect(success)
-        #expect(tracker.steps == ["com.openai.codex"])
+        #expect(tracker.steps == [AppLauncher.codexBundleIdentifier])
         #expect(tracker.urls == [AppLauncher.codexURL, bundleURL])
     }
 
@@ -108,7 +108,7 @@ struct AppLauncherTests {
         let success = await launcher.openCodex()
 
         #expect(success)
-        #expect(tracker.steps == ["com.openai.codex", "fallback"])
+        #expect(tracker.steps == [AppLauncher.codexBundleIdentifier, "fallback"])
         #expect(tracker.urls == [AppLauncher.codexURL, fallbackURL])
     }
 }

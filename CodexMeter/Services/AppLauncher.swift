@@ -9,7 +9,7 @@ struct AppLauncher: AppLaunching {
 
     private let bundleIdentifierResolver: @Sendable (String) -> URL?
     private let fallbackURLResolver: @Sendable () -> URL?
-    private let urlOpener: @Sendable (URL) -> Bool
+    private let urlOpener: @Sendable (URL) async -> Bool
     private let applicationOpener: @Sendable (URL) async -> Bool
 
     init(workspace: NSWorkspace = .shared, fileManager: FileManager = .default) {
@@ -27,7 +27,9 @@ struct AppLauncher: AppLaunching {
         }
 
         self.urlOpener = { url in
-            workspace.open(url)
+            await MainActor.run {
+                workspace.open(url)
+            }
         }
 
         self.applicationOpener = { url in
@@ -40,7 +42,7 @@ struct AppLauncher: AppLaunching {
     init(
         bundleIdentifierResolver: @escaping @Sendable (String) -> URL?,
         fallbackURLResolver: @escaping @Sendable () -> URL?,
-        urlOpener: @escaping @Sendable (URL) -> Bool,
+        urlOpener: @escaping @Sendable (URL) async -> Bool,
         applicationOpener: @escaping @Sendable (URL) async -> Bool
     ) {
         self.bundleIdentifierResolver = bundleIdentifierResolver
@@ -50,11 +52,11 @@ struct AppLauncher: AppLaunching {
     }
 
     func openUsageDashboard() async -> Bool {
-        urlOpener(Self.usageDashboardURL)
+        await urlOpener(Self.usageDashboardURL)
     }
 
     func openCodex() async -> Bool {
-        if urlOpener(Self.codexURL) {
+        if await urlOpener(Self.codexURL) {
             return true
         }
 
