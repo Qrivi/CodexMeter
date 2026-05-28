@@ -3,6 +3,7 @@ import Foundation
 
 struct AppLauncher: AppLaunching {
     static let usageDashboardURL = URL(string: "https://chatgpt.com/codex/settings/usage")!
+    static let codexURL = URL(string: "codex://")!
     static let codexBundleIdentifier = "com.openai.codex"
     static let codexFallbackPath = "/Applications/Codex.app"
 
@@ -53,6 +54,10 @@ struct AppLauncher: AppLaunching {
     }
 
     func openCodex() async -> Bool {
+        if urlOpener(Self.codexURL) {
+            return true
+        }
+
         if let appURL = bundleIdentifierResolver(Self.codexBundleIdentifier) {
             return await applicationOpener(appURL)
         }

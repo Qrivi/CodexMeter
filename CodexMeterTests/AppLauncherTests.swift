@@ -24,7 +24,36 @@ struct AppLauncherTests {
     }
 
     @Test
-    func prefersBundleIdentifierWhenOpeningCodex() async {
+    func opensCodexURLSchemeBeforeResolvingAppBundle() async {
+        let tracker = LauncherRecorder()
+        let launcher = AppLauncher(
+            bundleIdentifierResolver: { identifier in
+                tracker.recordStep(identifier)
+                return URL(fileURLWithPath: "/Applications/Codex.app")
+            },
+            fallbackURLResolver: {
+                tracker.recordStep("fallback")
+                return URL(fileURLWithPath: "/Fallback/Codex.app")
+            },
+            urlOpener: { url in
+                tracker.recordURL(url)
+                return true
+            },
+            applicationOpener: { url in
+                tracker.recordURL(url)
+                return true
+            }
+        )
+
+        let success = await launcher.openCodex()
+
+        #expect(success)
+        #expect(tracker.steps.isEmpty)
+        #expect(tracker.urls == [AppLauncher.codexURL])
+    }
+
+    @Test
+    func fallsBackToBundleIdentifierWhenCodexURLSchemeFails() async {
         let tracker = LauncherRecorder()
         let bundleURL = URL(fileURLWithPath: "/Applications/Codex.app")
         let launcher = AppLauncher(
@@ -36,7 +65,10 @@ struct AppLauncherTests {
                 tracker.recordStep("fallback")
                 return URL(fileURLWithPath: "/Fallback/Codex.app")
             },
-            urlOpener: { _ in true },
+            urlOpener: { url in
+                tracker.recordURL(url)
+                return false
+            },
             applicationOpener: { url in
                 tracker.recordURL(url)
                 return true
@@ -47,6 +79,36 @@ struct AppLauncherTests {
 
         #expect(success)
         #expect(tracker.steps == ["com.openai.codex"])
-        #expect(tracker.urls == [bundleURL])
+        #expect(tracker.urls == [AppLauncher.codexURL, bundleURL])
+    }
+
+    @Test
+    func fallsBackToCodexAppPathWhenURLSchemeAndBundleIdentifierFail() async {
+        let tracker = LauncherRecorder()
+        let fallbackURL = URL(fileURLWithPath: "/Applications/Codex.app")
+        let launcher = AppLauncher(
+            bundleIdentifierResolver: { identifier in
+                tracker.recordStep(identifier)
+                return nil
+            },
+            fallbackURLResolver: {
+                tracker.recordStep("fallback")
+                return fallbackURL
+            },
+            urlOpener: { url in
+                tracker.recordURL(url)
+                return false
+            },
+            applicationOpener: { url in
+                tracker.recordURL(url)
+                return true
+            }
+        )
+
+        let success = await launcher.openCodex()
+
+        #expect(success)
+        #expect(tracker.steps == ["com.openai.codex", "fallback"])
+        #expect(tracker.urls == [AppLauncher.codexURL, fallbackURL])
     }
 }
