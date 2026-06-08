@@ -12,13 +12,15 @@ permissions:
 jobs:
   release:
     name: Build and release
-    runs-on: macos-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
         include:
           - arch: arm64
+            runner: macos-26
             display_name: Apple Silicon
           - arch: x86_64
+            runner: macos-26-intel
             display_name: Intel
 
     steps:
@@ -107,6 +109,12 @@ jobs:
           plist_build_number="$(plutil -extract CFBundleVersion raw -o - "${info_plist}")"
           if [[ "${plist_build_number}" != "${{ steps.build.outputs.number }}" ]]; then
             echo "Expected CFBundleVersion ${{ steps.build.outputs.number }}, got ${plist_build_number}." >&2
+            exit 1
+          fi
+
+          sdk_name="$(plutil -extract DTSDKName raw -o - "${info_plist}")"
+          if [[ "${sdk_name}" != macosx26* ]]; then
+            echo "Expected a macOS 26 SDK build, got ${sdk_name}." >&2
             exit 1
           fi
 
