@@ -15,7 +15,7 @@ jobs:
   validate-version-tag:
     name: Validate version tag
     if: github.event_name == 'pull_request'
-    runs-on: macos-latest
+    runs-on: macos-26
     permissions:
       contents: read
 
@@ -93,7 +93,7 @@ jobs:
   create-version-tag:
     name: Create version tag
     if: github.event_name == 'push'
-    runs-on: macos-latest
+    runs-on: macos-26
     permissions:
       actions: write
       contents: write
