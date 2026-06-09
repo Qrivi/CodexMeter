@@ -50,7 +50,7 @@ enum PreviewSupport {
     @MainActor
     static func failingViewModel() -> UsageViewModel {
         let viewModel = self.viewModel(snapshot: Self.snapshot)
-        viewModel.applyPreviewFailure("Could not load Codex usage.")
+        viewModel.applyPreviewFailure("Auth token unavailable. Open Codex to refresh it.")
         return viewModel
     }
 }

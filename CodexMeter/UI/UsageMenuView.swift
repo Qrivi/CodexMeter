@@ -24,6 +24,9 @@ struct UsageMenuView: View {
             } else if let message = viewModel.currentFailureMessage {
                 Text(message)
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
             } else {
                 Text("Loading…")
