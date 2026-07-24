@@ -23,7 +23,7 @@ struct FormattingTests {
             timeZone: TimeZone(secondsFromGMT: 0)!
         )
 
-        #expect(text == "Resets 2:35 PM (4h 28m)")
+        #expect(text == "Resets 12:35 PM (4h 28m)")
     }
 
     @Test
@@ -38,7 +38,7 @@ struct FormattingTests {
             timeZone: TimeZone(secondsFromGMT: 0)!
         )
 
-        #expect(text == "Resets May 6, 2026 10:30 AM (1d 0h)")
+        #expect(text == "Resets May 7, 2026 8:16 AM (1d 0h)")
     }
 
     @Test
@@ -53,7 +53,7 @@ struct FormattingTests {
             timeZone: TimeZone(secondsFromGMT: 0)!
         )
 
-        #expect(text == "9:59 AM")
+        #expect(text == "7:59 AM")
     }
 
     @Test
@@ -68,7 +68,7 @@ struct FormattingTests {
             timeZone: TimeZone(secondsFromGMT: 0)!
         )
 
-        #expect(text == "May 5, 2026 10:07 AM")
+        #expect(text == "May 6, 2026 8:07 AM")
     }
 
     @Test
@@ -84,6 +84,25 @@ struct FormattingTests {
         let resetDate = UsageFormatting.resetDate(for: window, now: now)
 
         #expect(resetDate == now.addingTimeInterval(7_200))
+    }
+
+    @Test
+    func derivesWindowLabelsFromDurationInsteadOfSlotOrder() {
+        let weeklyWindow = UsageWindow(
+            usedPercent: 0,
+            limitWindowSeconds: 604_800,
+            resetAfterSeconds: 300,
+            resetAt: nil
+        )
+        let resetOnlyWindow = UsageWindow(
+            usedPercent: 0,
+            limitWindowSeconds: nil,
+            resetAfterSeconds: 18_000,
+            resetAt: nil
+        )
+
+        #expect(UsageFormatting.meterTitle(for: weeklyWindow, slot: .primary) == "Weekly limit")
+        #expect(UsageFormatting.meterTitle(for: resetOnlyWindow, slot: .secondary) == "5 hour limit")
     }
 
     @Test
@@ -143,7 +162,7 @@ struct FormattingTests {
         )
         let fallbackSegments = UsageFormatting.menuBarLabelSegments(
             snapshot: nil,
-            mode: .fiveHourRemaining,
+            mode: .primaryRemaining,
             colorMode: .colorful,
             state: .loading
         )

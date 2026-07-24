@@ -1,7 +1,7 @@
 import Foundation
 
 struct UsageService: UsageFetching {
-    static let endpoint = URL(string: "https://chatgpt.com/backend-api/wham/usage")!
+    nonisolated static let endpoint = URL(string: "https://chatgpt.com/backend-api/wham/usage")!
 
     private let tokenProvider: TokenProviding
     private let session: URLSession
@@ -31,14 +31,7 @@ struct UsageService: UsageFetching {
             throw UsageServiceError.auth(.unreadableFile)
         }
 
-        var request = URLRequest(url: Self.endpoint)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(authSession.accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-
-        if let accountID = authSession.accountID, accountID.isEmpty == false {
-            request.setValue(accountID, forHTTPHeaderField: "ChatGPT-Account-Id")
-        }
+        let request = Self.request(for: authSession)
 
         let data: Data
         let response: URLResponse
@@ -80,5 +73,18 @@ struct UsageService: UsageFetching {
         }
 
         return UsageFormatting.snapshot(from: usageResponse, now: now())
+    }
+
+    static func request(for authSession: AuthSession) -> URLRequest {
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(authSession.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        if let accountID = authSession.accountID, accountID.isEmpty == false {
+            request.setValue(accountID, forHTTPHeaderField: "ChatGPT-Account-Id")
+        }
+
+        return request
     }
 }

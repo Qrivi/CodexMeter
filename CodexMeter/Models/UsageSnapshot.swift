@@ -1,71 +1,83 @@
 import Foundation
 
-enum UsageWindowKind: String, Sendable {
-    case fiveHour
-    case weekly
+struct UsageMeterID: RawRepresentable, Hashable, Codable, Identifiable, Sendable {
+    let rawValue: String
 
-    nonisolated var sectionTitle: String {
-        switch self {
-        case .fiveHour:
-            "5 hour usage limit"
-        case .weekly:
-            "Weekly usage limit"
-        }
+    var id: String { rawValue }
+
+    static let primary = UsageMeterID(rawValue: "codex.primary")
+    static let secondary = UsageMeterID(rawValue: "codex.secondary")
+    static let credits = UsageMeterID(rawValue: "credits")
+
+    static func additional(feature: String) -> UsageMeterID {
+        UsageMeterID(rawValue: "additional.\(feature)")
     }
+}
 
-    nonisolated var limitNotificationTitle: String {
-        switch self {
-        case .fiveHour:
-            "Codex 5 hour usage limit is low"
-        case .weekly:
-            "Codex weekly usage limit is low"
-        }
-    }
+enum RateLimitWindowSlot: String, Sendable {
+    case primary
+    case secondary
 
-    nonisolated var resetNotificationTitle: String {
+    var fallbackTitle: String {
         switch self {
-        case .fiveHour:
-            "Codex 5 hour usage limit reset"
-        case .weekly:
-            "Codex weekly usage limit reset"
+        case .primary:
+            "Main window"
+        case .secondary:
+            "Secondary window"
         }
     }
 }
 
-struct UsageSectionViewData: Equatable, Sendable {
+enum UsageMeterKind: Equatable, Sendable {
+    case rateLimit
+    case credits
+}
+
+struct UsageMeterViewData: Equatable, Identifiable, Sendable {
+    let id: UsageMeterID
+    let kind: UsageMeterKind
     let title: String
-    let remainingText: String
+    let valueText: String
     let resetText: String?
     let remainingPercent: Int?
     let level: UsageLevel
     let resetDate: Date?
-    let windowKind: UsageWindowKind
+    let isAvailable: Bool
 
-    static func unavailable(kind: UsageWindowKind) -> UsageSectionViewData {
-        UsageSectionViewData(
-            title: kind.sectionTitle,
-            remainingText: "Unavailable",
-            resetText: nil,
-            remainingPercent: nil,
-            level: .neutral,
-            resetDate: nil,
-            windowKind: kind
-        )
+    nonisolated var supportsNotifications: Bool {
+        switch kind {
+        case .rateLimit:
+            true
+        case .credits:
+            false
+        }
     }
 }
 
 struct UsageSnapshot: Equatable, Sendable {
-    let fiveHourSection: UsageSectionViewData
-    let weeklySection: UsageSectionViewData
-    let creditsText: String
+    let meters: [UsageMeterViewData]
     let lastUpdated: Date
     let warningMessage: String?
 
+    func meter(id: UsageMeterID) -> UsageMeterViewData? {
+        meters.first { $0.id == id }
+    }
+
+    var mainRateLimitMeters: [UsageMeterViewData] {
+        [.primary, .secondary].compactMap { meter(id: $0) }
+    }
+
+    var additionalRateLimitMeters: [UsageMeterViewData] {
+        meters.filter { $0.id.rawValue.hasPrefix("additional.") }
+    }
+
+    var creditsMeter: UsageMeterViewData? {
+        meter(id: .credits)
+    }
+
     func withMessages(warningMessage: String? = nil) -> UsageSnapshot {
         UsageSnapshot(
-            fiveHourSection: fiveHourSection,
-            weeklySection: weeklySection,
-            creditsText: creditsText,
+            meters: meters,
             lastUpdated: lastUpdated,
             warningMessage: warningMessage
         )

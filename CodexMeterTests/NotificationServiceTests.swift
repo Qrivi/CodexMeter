@@ -30,11 +30,12 @@ struct NotificationServiceTests {
         let tracker = NotificationTracker()
         let service = makeNotificationService(tracker: tracker)
 
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 25, weeklyRemaining: 50), threshold: .twenty, resetNotificationsEnabled: false)
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 20, weeklyRemaining: 50), threshold: .twenty, resetNotificationsEnabled: false)
+        let settings = notificationSettings(threshold: .twenty)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 25, weeklyRemaining: 50), settings: settings)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 20, weeklyRemaining: 50), settings: settings)
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-threshold-20"])
-        #expect(await tracker.bodies == ["5 hour usage limit reached 20% remaining. Resets 2:35 PM (4h 28m)"])
+        #expect(await tracker.identifiers == ["codexmeter-codex-primary-threshold-20"])
+        #expect(await tracker.bodies == ["5 hour limit reached 20% remaining. Resets 2:35 PM (4h 28m)"])
     }
 
     @Test
@@ -43,10 +44,11 @@ struct NotificationServiceTests {
         let service = makeNotificationService(tracker: tracker)
 
         let snapshot = makeSnapshot(fiveHourRemaining: 15, weeklyRemaining: 50)
-        await service.evaluateNotifications(for: snapshot, threshold: .twenty, resetNotificationsEnabled: false)
-        await service.evaluateNotifications(for: snapshot, threshold: .twenty, resetNotificationsEnabled: false)
+        let settings = notificationSettings(threshold: .twenty)
+        await service.evaluateNotifications(for: snapshot, settings: settings)
+        await service.evaluateNotifications(for: snapshot, settings: settings)
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-threshold-20"])
+        #expect(await tracker.identifiers == ["codexmeter-codex-primary-threshold-20"])
     }
 
     @Test
@@ -54,10 +56,11 @@ struct NotificationServiceTests {
         let tracker = NotificationTracker()
         let service = makeNotificationService(tracker: tracker)
 
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 15, weeklyRemaining: 50, fiveHourReset: .init(timeIntervalSince1970: 100)), threshold: .twenty, resetNotificationsEnabled: false)
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 15, weeklyRemaining: 50, fiveHourReset: .init(timeIntervalSince1970: 200)), threshold: .twenty, resetNotificationsEnabled: false)
+        let settings = notificationSettings(threshold: .twenty)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 15, weeklyRemaining: 50, fiveHourReset: .init(timeIntervalSince1970: 100)), settings: settings)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 15, weeklyRemaining: 50, fiveHourReset: .init(timeIntervalSince1970: 200)), settings: settings)
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-threshold-20", "codexmeter-fiveHour-threshold-20"])
+        #expect(await tracker.identifiers == ["codexmeter-codex-primary-threshold-20", "codexmeter-codex-primary-threshold-20"])
     }
 
     @Test
@@ -65,9 +68,12 @@ struct NotificationServiceTests {
         let tracker = NotificationTracker()
         let service = makeNotificationService(tracker: tracker)
 
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 10, weeklyRemaining: 10), threshold: .twenty, resetNotificationsEnabled: false)
+        await service.evaluateNotifications(
+            for: makeSnapshot(fiveHourRemaining: 10, weeklyRemaining: 10),
+            settings: notificationSettings(threshold: .twenty, includesSecondary: true)
+        )
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-threshold-20", "codexmeter-weekly-threshold-20"])
+        #expect(await tracker.identifiers == ["codexmeter-codex-primary-threshold-20", "codexmeter-codex-secondary-threshold-20"])
     }
 
     @Test
@@ -76,12 +82,10 @@ struct NotificationServiceTests {
         let service = makeNotificationService(tracker: tracker)
 
         let snapshot = makeSnapshot(fiveHourRemaining: 9, weeklyRemaining: 50)
-        await service.updateThreshold(.ten)
-        await service.evaluateNotifications(for: snapshot, threshold: .ten, resetNotificationsEnabled: false)
-        await service.updateThreshold(.twenty)
-        await service.evaluateNotifications(for: snapshot, threshold: .twenty, resetNotificationsEnabled: false)
+        await service.evaluateNotifications(for: snapshot, settings: notificationSettings(threshold: .ten))
+        await service.evaluateNotifications(for: snapshot, settings: notificationSettings(threshold: .twenty))
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-threshold-10", "codexmeter-fiveHour-threshold-20"])
+        #expect(await tracker.identifiers == ["codexmeter-codex-primary-threshold-10", "codexmeter-codex-primary-threshold-20"])
     }
 
     @Test
@@ -90,10 +94,10 @@ struct NotificationServiceTests {
         let service = makeNotificationService(tracker: tracker)
 
         let snapshot = makeSnapshot(fiveHourRemaining: 9, weeklyRemaining: 50)
-        await service.evaluateNotifications(for: snapshot, threshold: .ten, resetNotificationsEnabled: false)
-        await service.evaluateNotifications(for: snapshot, threshold: .twenty, resetNotificationsEnabled: false)
+        await service.evaluateNotifications(for: snapshot, settings: notificationSettings(threshold: .ten))
+        await service.evaluateNotifications(for: snapshot, settings: notificationSettings(threshold: .twenty))
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-threshold-10", "codexmeter-fiveHour-threshold-20"])
+        #expect(await tracker.identifiers == ["codexmeter-codex-primary-threshold-10", "codexmeter-codex-primary-threshold-20"])
     }
 
     @Test
@@ -101,11 +105,12 @@ struct NotificationServiceTests {
         let tracker = NotificationTracker()
         let service = makeNotificationService(tracker: tracker)
 
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 42, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 99, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
+        let settings = notificationSettings(resetNotificationsEnabled: true)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 42, weeklyRemaining: 50), settings: settings)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 99, weeklyRemaining: 50), settings: settings)
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-reset"])
-        #expect(await tracker.bodies == ["5 hour usage limit reset. 99% remaining. Resets 2:35 PM (4h 28m)"])
+        #expect(await tracker.identifiers == ["codexmeter-codex-primary-reset"])
+        #expect(await tracker.bodies == ["5 hour limit reset. 99% remaining. Resets 2:35 PM (4h 28m)"])
     }
 
     @Test
@@ -113,10 +118,11 @@ struct NotificationServiceTests {
         let tracker = NotificationTracker()
         let service = makeNotificationService(tracker: tracker)
 
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 42, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 100, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
+        let settings = notificationSettings(resetNotificationsEnabled: true)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 42, weeklyRemaining: 50), settings: settings)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 100, weeklyRemaining: 50), settings: settings)
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-reset"])
+        #expect(await tracker.identifiers == ["codexmeter-codex-primary-reset"])
     }
 
     @Test
@@ -124,7 +130,10 @@ struct NotificationServiceTests {
         let tracker = NotificationTracker()
         let service = makeNotificationService(tracker: tracker)
 
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 99, weeklyRemaining: 100), threshold: nil, resetNotificationsEnabled: true)
+        await service.evaluateNotifications(
+            for: makeSnapshot(fiveHourRemaining: 99, weeklyRemaining: 100),
+            settings: notificationSettings(resetNotificationsEnabled: true)
+        )
 
         #expect(await tracker.identifiers == [])
     }
@@ -134,10 +143,11 @@ struct NotificationServiceTests {
         let tracker = NotificationTracker()
         let service = makeNotificationService(tracker: tracker)
 
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 42, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 99, weeklyRemaining: 99), threshold: nil, resetNotificationsEnabled: true)
+        let settings = notificationSettings(resetNotificationsEnabled: true, includesSecondary: true)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 42, weeklyRemaining: 50), settings: settings)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 99, weeklyRemaining: 99), settings: settings)
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-reset", "codexmeter-weekly-reset"])
+        #expect(await tracker.identifiers == ["codexmeter-codex-primary-reset", "codexmeter-codex-secondary-reset"])
     }
 
     @Test
@@ -145,10 +155,40 @@ struct NotificationServiceTests {
         let tracker = NotificationTracker()
         let service = makeNotificationService(tracker: tracker)
 
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 42, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 99, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
-        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 100, weeklyRemaining: 50), threshold: nil, resetNotificationsEnabled: true)
+        let settings = notificationSettings(resetNotificationsEnabled: true)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 42, weeklyRemaining: 50), settings: settings)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 99, weeklyRemaining: 50), settings: settings)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 100, weeklyRemaining: 50), settings: settings)
 
-        #expect(await tracker.identifiers == ["codexmeter-fiveHour-reset"])
+        #expect(await tracker.identifiers == ["codexmeter-codex-primary-reset"])
     }
+
+    @Test
+    func disabledMeterDoesNotNotify() async {
+        let tracker = NotificationTracker()
+        let service = makeNotificationService(tracker: tracker)
+        let settings: [UsageMeterID: MeterPreferences] = [
+            .primary: MeterPreferences(isVisible: false, notificationThreshold: .twenty)
+        ]
+
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 10), settings: settings)
+
+        #expect(await tracker.identifiers.isEmpty)
+    }
+}
+
+private func notificationSettings(
+    threshold: NotificationThreshold? = nil,
+    resetNotificationsEnabled: Bool = false,
+    includesSecondary: Bool = false
+) -> [UsageMeterID: MeterPreferences] {
+    let preferences = MeterPreferences(
+        notificationThreshold: threshold,
+        resetNotificationsEnabled: resetNotificationsEnabled
+    )
+    var settings: [UsageMeterID: MeterPreferences] = [.primary: preferences]
+    if includesSecondary {
+        settings[.secondary] = preferences
+    }
+    return settings
 }

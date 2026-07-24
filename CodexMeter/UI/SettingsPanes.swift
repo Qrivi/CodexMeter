@@ -70,7 +70,7 @@ struct AppearanceSettingsPane: View {
                     description: "Choose which usage value is always visible next to the menu bar title.",
                     selection: menuBarDisplayModeBinding,
                     options: MenuBarDisplayMode.allCases,
-                    label: \.menuTitle
+                    label: { viewModel.menuBarDisplayTitle(for: $0) }
                 )
 
                 SettingsPickerRow(
@@ -131,40 +131,98 @@ struct AppearanceSettingsPane: View {
     }
 }
 
-struct NotificationSettingsPane: View {
+struct MeterSettingsPane: View {
     @ObservedObject var viewModel: UsageViewModel
 
     var body: some View {
         SettingsPaneContainer {
-            Section("Usage Limits") {
+            if let snapshot = viewModel.snapshot {
+                Section("Main Rate Limits") {
+                    ForEach(snapshot.mainRateLimitMeters) { meter in
+                        meterSettingsBlock(for: meter)
+                    }
+                }
+
+                if snapshot.additionalRateLimitMeters.isEmpty == false {
+                    Section("Additional Rate Limits") {
+                        ForEach(snapshot.additionalRateLimitMeters) { meter in
+                            meterSettingsBlock(for: meter)
+                        }
+                    }
+                }
+
+                if let creditsMeter = snapshot.creditsMeter {
+                    Section("Credits") {
+                        meterSettingsBlock(for: creditsMeter)
+                    }
+                }
+            } else {
+                Section {
+                    Text("Usage meters will appear after CodexMeter loads your usage.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func meterSettingsBlock(for meter: UsageMeterViewData) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(meter.title)
+                .font(.headline)
+
+            SettingsToggleRow(
+                title: "Show meter",
+                description: "Show or hide this meter in the CodexMeter menu.",
+                isOn: visibilityBinding(for: meter.id)
+            )
+            .disabled(meter.isAvailable == false)
+
+            if meter.isAvailable == false {
+                Label("This usage meter is currently not available.", systemImage: "info.circle")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else if viewModel.preferences(for: meter.id).isVisible && meter.supportsNotifications {
                 SettingsPickerRow(
                     title: "Low usage notification",
-                    description: "Send a notification when either usage window falls below the selected remaining percentage.",
-                    selection: notificationThresholdBinding,
+                    description: "Notify when this meter reaches the selected remaining percentage.",
+                    selection: notificationThresholdBinding(for: meter.id),
                     options: [nil] + NotificationThreshold.allCases.map(Optional.some),
                     label: { threshold in threshold?.title ?? "Off" }
                 )
 
                 SettingsToggleRow(
                     title: "Notify when limit resets",
-                    description: "Send a notification after a usage window returns to a full allowance.",
-                    isOn: resetNotificationsBinding
+                    description: "Notify after this meter returns to a full allowance.",
+                    isOn: resetNotificationsBinding(for: meter.id)
                 )
+            } else if viewModel.preferences(for: meter.id).isVisible {
+                Label("Usage notifications are not available for credits.", systemImage: "info.circle")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
+        .padding(.vertical, 4)
     }
 
-    private var notificationThresholdBinding: Binding<NotificationThreshold?> {
+    private func visibilityBinding(for meterID: UsageMeterID) -> Binding<Bool> {
         Binding(
-            get: { viewModel.limitNotificationThreshold },
-            set: { viewModel.selectNotificationThreshold($0) }
+            get: { viewModel.preferences(for: meterID).isVisible },
+            set: { viewModel.setMeterVisible($0, meterID: meterID) }
         )
     }
 
-    private var resetNotificationsBinding: Binding<Bool> {
+    private func notificationThresholdBinding(for meterID: UsageMeterID) -> Binding<NotificationThreshold?> {
         Binding(
-            get: { viewModel.resetNotificationsEnabled },
-            set: { viewModel.setResetNotificationsEnabled($0) }
+            get: { viewModel.preferences(for: meterID).notificationThreshold },
+            set: { viewModel.selectNotificationThreshold($0, meterID: meterID) }
+        )
+    }
+
+    private func resetNotificationsBinding(for meterID: UsageMeterID) -> Binding<Bool> {
+        Binding(
+            get: { viewModel.preferences(for: meterID).resetNotificationsEnabled },
+            set: { viewModel.setResetNotificationsEnabled($0, meterID: meterID) }
         )
     }
 }
@@ -324,9 +382,9 @@ struct SettingsPanes_Previews: PreviewProvider {
                 .frame(width: 520, height: 520)
                 .previewDisplayName("Appearance Settings")
 
-            NotificationSettingsPane(viewModel: PreviewSupport.viewModel())
+            MeterSettingsPane(viewModel: PreviewSupport.viewModel())
                 .frame(width: 520, height: 280)
-                .previewDisplayName("Notification Settings")
+                .previewDisplayName("Meter Settings")
 
             AboutSettingsPane()
                 .frame(width: 520, height: 280)

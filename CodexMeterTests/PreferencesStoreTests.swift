@@ -15,8 +15,7 @@ struct PreferencesStoreTests {
         #expect(store.menuBarColorMode == .monochrome)
         #expect(store.meterColorMode == .colorful)
         #expect(store.remainingLabelColorMode == .colorfulWhenLow)
-        #expect(store.limitNotificationThreshold == nil)
-        #expect(store.resetNotificationsEnabled == false)
+        #expect(store.meterPreferences.isEmpty)
         #expect(store.pollOnMenuOpen)
         #expect(store.launchAtLoginEnabled == false)
     }
@@ -32,8 +31,13 @@ struct PreferencesStoreTests {
         store.menuBarColorMode = .colorfulWhenLow
         store.meterColorMode = .monochrome
         store.remainingLabelColorMode = .colorful
-        store.limitNotificationThreshold = .ten
-        store.resetNotificationsEnabled = true
+        store.meterPreferences = [
+            .primary: MeterPreferences(
+                isVisible: false,
+                notificationThreshold: .ten,
+                resetNotificationsEnabled: true
+            )
+        ]
         store.pollOnMenuOpen = false
         store.launchAtLoginEnabled = true
 
@@ -44,8 +48,11 @@ struct PreferencesStoreTests {
         #expect(store.menuBarColorMode == .colorfulWhenLow)
         #expect(store.meterColorMode == .monochrome)
         #expect(store.remainingLabelColorMode == .colorful)
-        #expect(store.limitNotificationThreshold == .ten)
-        #expect(store.resetNotificationsEnabled)
+        #expect(store.meterPreferences[.primary] == MeterPreferences(
+            isVisible: false,
+            notificationThreshold: .ten,
+            resetNotificationsEnabled: true
+        ))
         #expect(store.pollOnMenuOpen == false)
         #expect(store.launchAtLoginEnabled)
     }

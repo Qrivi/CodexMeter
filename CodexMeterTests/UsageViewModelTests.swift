@@ -12,7 +12,7 @@ struct UsageViewModelTests {
         viewModel.start()
         try await waitUntil { viewModel.loadState == .loaded }
 
-        #expect(viewModel.snapshot?.fiveHourSection.remainingPercent == 64)
+        #expect(viewModel.snapshot?.meter(id: .primary)?.remainingPercent == 64)
         #expect(viewModel.loadState == .loaded)
     }
 
@@ -61,7 +61,7 @@ struct UsageViewModelTests {
         viewModel.refreshNow()
         try await waitUntil { viewModel.snapshot?.warningMessage == "Offline" }
 
-        #expect(viewModel.snapshot?.fiveHourSection.remainingPercent == initialSnapshot.fiveHourSection.remainingPercent)
+        #expect(viewModel.snapshot?.meter(id: .primary)?.remainingPercent == initialSnapshot.meter(id: .primary)?.remainingPercent)
         #expect(viewModel.snapshot?.warningMessage == "Offline")
         #expect(viewModel.menuBarText == "Error")
         #expect(viewModel.menuBarTextSegments == [MenuBarLabelSegment(text: "Error", tone: .critical)])
@@ -81,7 +81,7 @@ struct UsageViewModelTests {
         viewModel.refreshNow()
         try await waitUntil { viewModel.snapshot?.warningMessage == "Auth token unavailable. Open Codex to refresh it." }
 
-        #expect(viewModel.snapshot?.fiveHourSection.remainingPercent == initialSnapshot.fiveHourSection.remainingPercent)
+        #expect(viewModel.snapshot?.meter(id: .primary)?.remainingPercent == initialSnapshot.meter(id: .primary)?.remainingPercent)
         #expect(viewModel.snapshot?.warningMessage == "Auth token unavailable. Open Codex to refresh it.")
         #expect(viewModel.menuBarText == "Error")
         #expect(viewModel.menuBarTextSegments == [MenuBarLabelSegment(text: "Error", tone: .critical)])
@@ -170,6 +170,26 @@ struct UsageViewModelTests {
         #expect(viewModel.remainingLabelColorMode == .colorful)
         #expect(store.meterColorMode == .monochrome)
         #expect(store.remainingLabelColorMode == .colorful)
+    }
+
+    @MainActor
+    @Test
+    func hidesOnlyTheSelectedMeterAndPersistsItsSettings() async throws {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        let store = PreferencesStore(userDefaults: defaults)
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(makeSnapshot())]),
+            preferencesStore: store
+        )
+
+        viewModel.refreshNow()
+        try await waitUntil { viewModel.loadState == .loaded }
+        viewModel.setMeterVisible(false, meterID: .secondary)
+
+        #expect(viewModel.visibleMeters(in: viewModel.snapshot!).map(\.id) == [.primary, .credits])
+        #expect(store.meterPreferences[.secondary]?.isVisible == false)
+        #expect(viewModel.preferences(for: .primary).isVisible)
     }
 
     @MainActor
@@ -292,10 +312,10 @@ struct UsageViewModelTests {
             notificationService: notificationService
         )
 
-        viewModel.setResetNotificationsEnabled(true)
+        viewModel.setResetNotificationsEnabled(true, meterID: .primary)
         try await waitUntil { notificationService.authorizationRequestCount == 1 }
 
-        #expect(viewModel.resetNotificationsEnabled)
-        #expect(store.resetNotificationsEnabled)
+        #expect(viewModel.preferences(for: .primary).resetNotificationsEnabled)
+        #expect(store.meterPreferences[.primary]?.resetNotificationsEnabled == true)
     }
 }

@@ -29,12 +29,15 @@ struct UsageServiceTests {
         }
         """
 
+        let authSession = AuthSession(accessToken: "token", accountID: "acct")
+        let request = UsageService.request(for: authSession)
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer token")
+        #expect(request.value(forHTTPHeaderField: "ChatGPT-Account-Id") == "acct")
+
         let service = UsageService(
-            tokenProvider: MockTokenProvider(result: .success(AuthSession(accessToken: "token", accountID: "acct"))),
+            tokenProvider: MockTokenProvider(result: .success(authSession)),
             now: { Date(timeIntervalSince1970: 1_778_054_820) },
-            requestPerformer: { request in
-                #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer token")
-                #expect(request.value(forHTTPHeaderField: "ChatGPT-Account-Id") == "acct")
+            requestPerformer: { _ in
                 return (
                     Data(payload.utf8),
                     HTTPURLResponse(url: UsageService.endpoint, statusCode: 200, httpVersion: nil, headerFields: nil)!
@@ -44,9 +47,73 @@ struct UsageServiceTests {
 
         let snapshot = try await service.fetchUsageSnapshot()
 
-        #expect(snapshot.fiveHourSection.remainingPercent == 64)
-        #expect(snapshot.weeklySection.remainingPercent == 73)
-        #expect(snapshot.creditsText == "12")
+        #expect(snapshot.meter(id: .primary)?.remainingPercent == 64)
+        #expect(snapshot.meter(id: .secondary)?.remainingPercent == 73)
+        #expect(snapshot.meter(id: .credits)?.valueText == "12")
+    }
+
+    @Test
+    func decodesWeeklyOnlyAndAdditionalRateLimitsWithoutReassigningWindowNames() async throws {
+        let payload = """
+        {
+          "plan_type": "prolite",
+          "rate_limit": {
+            "primary_window": {
+              "used_percent": 0,
+              "limit_window_seconds": 604800,
+              "reset_after_seconds": 604800,
+              "reset_at": 1785275783
+            },
+            "secondary_window": null
+          },
+          "additional_rate_limits": [
+            {
+              "limit_name": "GPT-5.3-Codex-Spark",
+              "metered_feature": "codex_bengalfox",
+              "rate_limit": {
+                "primary_window": {
+                  "used_percent": 25,
+                  "limit_window_seconds": 604800,
+                  "reset_after_seconds": 604800,
+                  "reset_at": 1785275783
+                },
+                "secondary_window": {
+                  "used_percent": 50,
+                  "limit_window_seconds": 18000,
+                  "reset_after_seconds": 9000
+                }
+              }
+            }
+          ],
+          "credits": {
+            "unlimited": false,
+            "balance": "0",
+            "has_credits": false
+          }
+        }
+        """
+
+        let service = UsageService(
+            tokenProvider: MockTokenProvider(result: .success(AuthSession(accessToken: "token", accountID: nil))),
+            requestPerformer: { _ in
+                (
+                    Data(payload.utf8),
+                    HTTPURLResponse(url: UsageService.endpoint, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                )
+            }
+        )
+
+        let snapshot = try await service.fetchUsageSnapshot()
+        let sparkID = UsageMeterID.additional(feature: "codex_bengalfox")
+
+        #expect(snapshot.meter(id: .primary)?.title == "Weekly limit")
+        #expect(snapshot.meter(id: .primary)?.remainingPercent == 100)
+        #expect(snapshot.meter(id: .secondary)?.isAvailable == false)
+        #expect(snapshot.meter(id: .secondary)?.title == "Secondary window")
+        #expect(snapshot.meter(id: sparkID)?.title == "GPT-5.3-Codex-Spark")
+        #expect(snapshot.meter(id: sparkID)?.remainingPercent == 75)
+        #expect(snapshot.additionalRateLimitMeters.count == 1)
+        #expect(snapshot.meter(id: .credits)?.valueText == "0")
     }
 
     @Test

@@ -11,8 +11,7 @@ final class UsageViewModel: ObservableObject {
     @Published private(set) var menuBarColorMode: UsageColorMode
     @Published private(set) var meterColorMode: UsageColorMode
     @Published private(set) var remainingLabelColorMode: UsageColorMode
-    @Published private(set) var limitNotificationThreshold: NotificationThreshold?
-    @Published private(set) var resetNotificationsEnabled: Bool
+    @Published private(set) var meterPreferences: [UsageMeterID: MeterPreferences]
     @Published private(set) var pollOnMenuOpen: Bool
     @Published private(set) var launchAtLoginEnabled: Bool
     @Published private(set) var settingsErrorMessage: String?
@@ -53,8 +52,7 @@ final class UsageViewModel: ObservableObject {
         self.menuBarColorMode = preferencesStore.menuBarColorMode
         self.meterColorMode = preferencesStore.meterColorMode
         self.remainingLabelColorMode = preferencesStore.remainingLabelColorMode
-        self.limitNotificationThreshold = preferencesStore.limitNotificationThreshold
-        self.resetNotificationsEnabled = preferencesStore.resetNotificationsEnabled
+        self.meterPreferences = preferencesStore.meterPreferences
         self.pollOnMenuOpen = preferencesStore.pollOnMenuOpen
         self.launchAtLoginEnabled = loginItemService.isEnabled()
         preferencesStore.launchAtLoginEnabled = launchAtLoginEnabled
@@ -80,7 +78,25 @@ final class UsageViewModel: ObservableObject {
     }
 
     var menuBarTitle: String {
-        menuBarDisplayMode.menuBarTitle
+        switch menuBarDisplayMode {
+        case .primaryRemaining:
+            compactMenuBarTitle(for: snapshot?.meter(id: .primary)) ?? menuBarDisplayMode.menuBarTitle
+        case .secondaryRemaining:
+            compactMenuBarTitle(for: snapshot?.meter(id: .secondary)) ?? menuBarDisplayMode.menuBarTitle
+        case .both, .credits:
+            menuBarDisplayMode.menuBarTitle
+        }
+    }
+
+    func menuBarDisplayTitle(for mode: MenuBarDisplayMode) -> String {
+        switch mode {
+        case .primaryRemaining:
+            snapshot?.meter(id: .primary)?.title ?? mode.menuTitle
+        case .secondaryRemaining:
+            snapshot?.meter(id: .secondary)?.title ?? mode.menuTitle
+        case .both, .credits:
+            mode.menuTitle
+        }
     }
 
     var isLoadingWithoutSnapshot: Bool {
@@ -178,22 +194,38 @@ final class UsageViewModel: ObservableObject {
         settingsErrorMessage = nil
     }
 
-    func selectNotificationThreshold(_ threshold: NotificationThreshold?) {
-        limitNotificationThreshold = threshold
-        preferencesStore.limitNotificationThreshold = threshold
+    func preferences(for meterID: UsageMeterID) -> MeterPreferences {
+        meterPreferences[meterID] ?? MeterPreferences()
+    }
+
+    func visibleMeters(in snapshot: UsageSnapshot) -> [UsageMeterViewData] {
+        snapshot.meters.filter { meter in
+            meter.isAvailable && preferences(for: meter.id).isVisible
+        }
+    }
+
+    func setMeterVisible(_ isVisible: Bool, meterID: UsageMeterID) {
+        updatePreferences(for: meterID) { preferences in
+            preferences.isVisible = isVisible
+        }
+    }
+
+    func selectNotificationThreshold(_ threshold: NotificationThreshold?, meterID: UsageMeterID) {
+        updatePreferences(for: meterID) { preferences in
+            preferences.notificationThreshold = threshold
+        }
 
         Task {
-            await notificationService.updateThreshold(threshold)
-
             if threshold != nil {
                 _ = await notificationService.requestAuthorizationIfNeeded()
             }
         }
     }
 
-    func setResetNotificationsEnabled(_ isEnabled: Bool) {
-        resetNotificationsEnabled = isEnabled
-        preferencesStore.resetNotificationsEnabled = isEnabled
+    func setResetNotificationsEnabled(_ isEnabled: Bool, meterID: UsageMeterID) {
+        updatePreferences(for: meterID) { preferences in
+            preferences.resetNotificationsEnabled = isEnabled
+        }
 
         guard isEnabled else {
             return
@@ -243,20 +275,21 @@ final class UsageViewModel: ObservableObject {
             do {
                 let freshSnapshot = try await usageService.fetchUsageSnapshot()
 
-                let notificationSettings: (NotificationThreshold?, Bool) = await MainActor.run { [weak self] in
+                let notificationSettings: [UsageMeterID: MeterPreferences] = await MainActor.run { [weak self] in
                     guard let self, Task.isCancelled == false else {
-                        return (nil, false)
+                        return [:]
                     }
 
                     snapshot = freshSnapshot
                     loadState = .loaded
-                    return (limitNotificationThreshold, resetNotificationsEnabled)
+                    return Dictionary(uniqueKeysWithValues: freshSnapshot.meters.map { meter in
+                        (meter.id, self.preferences(for: meter.id))
+                    })
                 }
 
                 await notificationService.evaluateNotifications(
                     for: freshSnapshot,
-                    threshold: notificationSettings.0,
-                    resetNotificationsEnabled: notificationSettings.1
+                    settings: notificationSettings
                 )
             } catch let error as UsageServiceError {
                 await MainActor.run { [weak self] in
@@ -301,6 +334,26 @@ final class UsageViewModel: ObservableObject {
         } else {
             loadState = .failed(message: message)
         }
+    }
+
+    private func updatePreferences(
+        for meterID: UsageMeterID,
+        change: (inout MeterPreferences) -> Void
+    ) {
+        var preferences = preferences(for: meterID)
+        change(&preferences)
+        meterPreferences[meterID] = preferences
+        preferencesStore.meterPreferences = meterPreferences
+    }
+
+    private func compactMenuBarTitle(for meter: UsageMeterViewData?) -> String? {
+        guard let title = meter?.title else {
+            return nil
+        }
+
+        return title
+            .replacingOccurrences(of: " usage limit", with: "")
+            .replacingOccurrences(of: " limit", with: "")
     }
 
     private func schedulePolling() {

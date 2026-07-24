@@ -64,7 +64,7 @@ struct AppearanceSettingsPreview: View {
     private func appMenuPreview(remainingPercent: Int, level: UsageLevel) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                Text("5 hour usage limit")
+                Text("5 hour limit")
                     .font(.headline)
 
                 Spacer()
@@ -104,35 +104,50 @@ struct AppearanceSettingsPreview: View {
         let weeklyPercent = 100 - remainingPercent
 
         return UsageSnapshot(
-            fiveHourSection: previewSection(
-                kind: .fiveHour,
+            meters: [previewMeter(
+                id: .primary,
+                title: "5 hour limit",
                 remainingPercent: remainingPercent,
                 level: level
             ),
-            weeklySection: previewSection(
-                kind: .weekly,
+            previewMeter(
+                id: .secondary,
+                title: "Weekly limit",
                 remainingPercent: weeklyPercent,
                 level: UsageFormatting.level(for: weeklyPercent)
             ),
-            creditsText: "1,234",
+            UsageMeterViewData(
+                id: .credits,
+                kind: .credits,
+                title: "Credits remaining",
+                valueText: "1,234",
+                resetText: nil,
+                remainingPercent: nil,
+                level: .neutral,
+                resetDate: nil,
+                isAvailable: true
+            )],
             lastUpdated: Date(),
             warningMessage: nil
         )
     }
 
-    private func previewSection(
-        kind: UsageWindowKind,
+    private func previewMeter(
+        id: UsageMeterID,
+        title: String,
         remainingPercent: Int,
         level: UsageLevel
-    ) -> UsageSectionViewData {
-        UsageSectionViewData(
-            title: kind.sectionTitle,
-            remainingText: "\(remainingPercent)% remaining",
+    ) -> UsageMeterViewData {
+        UsageMeterViewData(
+            id: id,
+            kind: .rateLimit,
+            title: title,
+            valueText: "\(remainingPercent)% remaining",
             resetText: nil,
             remainingPercent: remainingPercent,
             level: level,
             resetDate: nil,
-            windowKind: kind
+            isAvailable: true
         )
     }
 }
@@ -180,7 +195,7 @@ struct SettingsPreviewComponents_Previews: PreviewProvider {
     static var previews: some View {
         Group {
             AppearanceSettingsPreview(
-                menuBarDisplayMode: .fiveHourRemaining,
+                menuBarDisplayMode: .primaryRemaining,
                 menuBarColorMode: .colorfulWhenLow,
                 meterColorMode: .colorful,
                 remainingLabelColorMode: .colorfulWhenLow

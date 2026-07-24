@@ -30,18 +30,18 @@ enum PollingInterval: Int, CaseIterable, Identifiable, Sendable {
 
 enum MenuBarDisplayMode: String, CaseIterable, Identifiable, Sendable {
     case both = "both"
-    case fiveHourRemaining = "five_hour_remaining"
-    case weekRemaining = "week_remaining"
+    case primaryRemaining = "primary_remaining"
+    case secondaryRemaining = "secondary_remaining"
     case credits = "credits"
 
     var id: String { rawValue }
 
     var menuTitle: String {
         switch self {
-        case .fiveHourRemaining:
-            "5 hour usage limit"
-        case .weekRemaining:
-            "Weekly usage limit"
+        case .primaryRemaining:
+            "Main window"
+        case .secondaryRemaining:
+            "Secondary window"
         case .both:
             "Both usage limits"
         case .credits:
@@ -51,10 +51,10 @@ enum MenuBarDisplayMode: String, CaseIterable, Identifiable, Sendable {
 
     var menuBarTitle: String {
         switch self {
-        case .fiveHourRemaining:
-            "5 hour"
-        case .weekRemaining:
-            "Weekly"
+        case .primaryRemaining:
+            "Primary"
+        case .secondaryRemaining:
+            "Secondary"
         case .both:
             "Limits"
         case .credits:
@@ -94,3 +94,21 @@ enum NotificationThreshold: Int, CaseIterable, Identifiable, Sendable {
         "Notify at \(rawValue)%"
     }
 }
+
+struct MeterPreferences: Codable, Equatable, Sendable {
+    var isVisible = true
+    var notificationThreshold: NotificationThreshold?
+    var resetNotificationsEnabled = false
+
+    nonisolated init(
+        isVisible: Bool = true,
+        notificationThreshold: NotificationThreshold? = nil,
+        resetNotificationsEnabled: Bool = false
+    ) {
+        self.isVisible = isVisible
+        self.notificationThreshold = notificationThreshold
+        self.resetNotificationsEnabled = resetNotificationsEnabled
+    }
+}
+
+extension NotificationThreshold: Codable {}
