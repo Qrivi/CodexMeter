@@ -20,18 +20,30 @@ enum UsageFormatting {
         for (index, additionalLimit) in (response.additionalRateLimits ?? []).enumerated() {
             let displayName = nonEmpty(additionalLimit.limitName) ?? "Additional usage"
             let feature = nonEmpty(additionalLimit.meteredFeature)
-                ?? nonEmpty(additionalLimit.limitName)
                 ?? "unknown-\(index)"
+            let windowCandidates: [(slot: RateLimitWindowSlot, window: UsageWindow?)] = [
+                (.primary, additionalLimit.rateLimit?.primaryWindow),
+                (.secondary, additionalLimit.rateLimit?.secondaryWindow)
+            ]
+            let windows = windowCandidates.compactMap { candidate in
+                candidate.window.map { (slot: candidate.slot, window: $0) }
+            }
 
-            let window = additionalLimit.rateLimit?.primaryWindow
-                ?? additionalLimit.rateLimit?.secondaryWindow
-            meters.append(rateLimitMeter(
-                id: .additional(feature: feature),
-                window: window,
-                slot: .primary,
-                namePrefix: displayName,
-                now: now
-            ))
+            for candidate in windows {
+                let title = additionalMeterTitle(
+                    displayName: displayName,
+                    window: candidate.window,
+                    slot: candidate.slot,
+                    showsDuration: windows.count > 1
+                )
+                meters.append(rateLimitMeter(
+                    id: .additional(feature: feature, slot: candidate.slot),
+                    window: candidate.window,
+                    slot: candidate.slot,
+                    namePrefix: title,
+                    now: now
+                ))
+            }
         }
 
         let creditsValue = creditsText(from: response.credits)
@@ -48,6 +60,20 @@ enum UsageFormatting {
         ))
 
         return UsageSnapshot(meters: meters, lastUpdated: now, warningMessage: nil)
+    }
+
+    static func additionalMeterTitle(
+        displayName: String,
+        window: UsageWindow,
+        slot: RateLimitWindowSlot,
+        showsDuration: Bool
+    ) -> String {
+        guard showsDuration else {
+            return displayName
+        }
+
+        let duration = windowDurationTitle(for: window) ?? slot.fallbackTitle
+        return "\(displayName) · \(duration)"
     }
 
     static func rateLimitMeter(

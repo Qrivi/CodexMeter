@@ -219,9 +219,23 @@ actor NotificationService: NotificationScheduling {
     }
 
     private func identifierComponent(for meterID: UsageMeterID) -> String {
-        meterID.rawValue
-            .lowercased()
-            .map { $0.isLetter || $0.isNumber ? $0 : "-" }
-            .reduce(into: "") { $0.append($1) }
+        if meterID.rawValue == "codex.primary" {
+            return "codex-primary"
+        }
+
+        if meterID.rawValue == "codex.secondary" {
+            return "codex-secondary"
+        }
+
+        if meterID.rawValue == "credits" {
+            return "credits"
+        }
+
+        let encodedID = Data(meterID.rawValue.utf8)
+            .base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return "dynamic-\(encodedID)"
     }
 }

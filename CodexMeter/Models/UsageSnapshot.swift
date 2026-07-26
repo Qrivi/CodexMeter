@@ -9,8 +9,8 @@ struct UsageMeterID: RawRepresentable, Hashable, Codable, Identifiable, Sendable
     static let secondary = UsageMeterID(rawValue: "codex.secondary")
     static let credits = UsageMeterID(rawValue: "credits")
 
-    static func additional(feature: String) -> UsageMeterID {
-        UsageMeterID(rawValue: "additional.\(feature)")
+    static func additional(feature: String, slot: RateLimitWindowSlot) -> UsageMeterID {
+        UsageMeterID(rawValue: "additional.\(feature).\(slot.rawValue)")
     }
 }
 

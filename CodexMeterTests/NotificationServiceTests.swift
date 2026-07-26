@@ -175,6 +175,49 @@ struct NotificationServiceTests {
 
         #expect(await tracker.identifiers.isEmpty)
     }
+
+    @Test
+    func dynamicMeterNotificationIdentifiersDoNotCollideAfterEncoding() async {
+        let tracker = NotificationTracker()
+        let service = makeNotificationService(tracker: tracker)
+        let hyphenatedID = UsageMeterID.additional(
+            feature: "codex-feature",
+            slot: .primary
+        )
+        let underscoredID = UsageMeterID.additional(
+            feature: "codex_feature",
+            slot: .primary
+        )
+        let meters = [hyphenatedID, underscoredID].map { meterID in
+            UsageMeterViewData(
+                id: meterID,
+                kind: .rateLimit,
+                title: "Additional usage",
+                valueText: "10% remaining",
+                resetText: nil,
+                remainingPercent: 10,
+                level: .critical,
+                resetDate: Date(timeIntervalSince1970: 100),
+                isAvailable: true
+            )
+        }
+        let snapshot = UsageSnapshot(
+            meters: meters,
+            lastUpdated: Date(),
+            warningMessage: nil
+        )
+        let preferences = MeterPreferences(notificationThreshold: .twenty)
+        let settings = [
+            hyphenatedID: preferences,
+            underscoredID: preferences
+        ]
+
+        await service.evaluateNotifications(for: snapshot, settings: settings)
+
+        let identifiers = await tracker.identifiers
+        #expect(identifiers.count == 2)
+        #expect(Set(identifiers).count == 2)
+    }
 }
 
 private func notificationSettings(

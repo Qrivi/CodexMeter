@@ -53,7 +53,7 @@ struct UsageServiceTests {
     }
 
     @Test
-    func decodesWeeklyOnlyAndAdditionalRateLimitsWithoutReassigningWindowNames() async throws {
+    func decodesWeeklyOnlyAndMultiWindowAdditionalRateLimits() async throws {
         let payload = """
         {
           "plan_type": "prolite",
@@ -104,15 +104,30 @@ struct UsageServiceTests {
         )
 
         let snapshot = try await service.fetchUsageSnapshot()
-        let sparkID = UsageMeterID.additional(feature: "codex_bengalfox")
+        let sparkWeeklyID = UsageMeterID.additional(
+            feature: "codex_bengalfox",
+            slot: .primary
+        )
+        let sparkFiveHourID = UsageMeterID.additional(
+            feature: "codex_bengalfox",
+            slot: .secondary
+        )
 
         #expect(snapshot.meter(id: .primary)?.title == "Weekly limit")
         #expect(snapshot.meter(id: .primary)?.remainingPercent == 100)
         #expect(snapshot.meter(id: .secondary)?.isAvailable == false)
         #expect(snapshot.meter(id: .secondary)?.title == "Secondary window")
-        #expect(snapshot.meter(id: sparkID)?.title == "GPT-5.3-Codex-Spark")
-        #expect(snapshot.meter(id: sparkID)?.remainingPercent == 75)
-        #expect(snapshot.additionalRateLimitMeters.count == 1)
+        #expect(
+            snapshot.meter(id: sparkWeeklyID)?.title
+                == "GPT-5.3-Codex-Spark · Weekly limit"
+        )
+        #expect(snapshot.meter(id: sparkWeeklyID)?.remainingPercent == 75)
+        #expect(
+            snapshot.meter(id: sparkFiveHourID)?.title
+                == "GPT-5.3-Codex-Spark · 5 hour limit"
+        )
+        #expect(snapshot.meter(id: sparkFiveHourID)?.remainingPercent == 50)
+        #expect(snapshot.additionalRateLimitMeters.count == 2)
         #expect(snapshot.meter(id: .credits)?.valueText == "0")
     }
 

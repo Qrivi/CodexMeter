@@ -106,6 +106,33 @@ struct FormattingTests {
     }
 
     @Test
+    func addsDurationToAdditionalMeterTitleOnlyWhenNeededToDisambiguateWindows() {
+        let weeklyWindow = UsageWindow(
+            usedPercent: 0,
+            limitWindowSeconds: 604_800,
+            resetAfterSeconds: nil,
+            resetAt: nil
+        )
+
+        #expect(
+            UsageFormatting.additionalMeterTitle(
+                displayName: "GPT-5.3-Codex-Spark",
+                window: weeklyWindow,
+                slot: .primary,
+                showsDuration: false
+            ) == "GPT-5.3-Codex-Spark"
+        )
+        #expect(
+            UsageFormatting.additionalMeterTitle(
+                displayName: "GPT-5.3-Codex-Spark",
+                window: weeklyWindow,
+                slot: .primary,
+                showsDuration: true
+            ) == "GPT-5.3-Codex-Spark · Weekly limit"
+        )
+    }
+
+    @Test
     func rendersCreditsAsUnlimitedOrRawBalance() {
         let unlimitedCredits = CreditsInfo(unlimited: true, balance: .int(0), hasCredits: true)
         let finiteCredits = CreditsInfo(unlimited: false, balance: .string("42.5"), hasCredits: true)
