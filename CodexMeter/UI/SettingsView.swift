@@ -89,6 +89,8 @@ struct SettingsView: View {
             .animation(.snappy, value: showsAppearancePreview)
         case .meters:
             MeterSettingsPane(viewModel: viewModel)
+        case .cli:
+            CLISettingsPane()
         case .about:
             AboutSettingsPane()
         }
@@ -99,6 +101,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
     case general
     case meters
     case appearance
+    case cli
     case about
 
     var id: String { rawValue }
@@ -111,6 +114,8 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
             "Appearance"
         case .meters:
             "Meters"
+        case .cli:
+            "CLI"
         case .about:
             "About"
         }
@@ -124,6 +129,8 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
             "paintpalette"
         case .meters:
             "gauge.with.dots.needle.50percent"
+        case .cli:
+            "terminal"
         case .about:
             "info.circle"
         }

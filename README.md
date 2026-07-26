@@ -28,6 +28,23 @@ brew tap qrivi/tap
 brew install --cask qrivi/tap/codexmeter
 ```
 
+## Command line
+
+CodexMeter includes a `codexmeter` command that uses the same local auth session and usage model as the menu bar app.
+Open **Settings → CLI** to install a safe symbolic link in `~/.local/bin`, Homebrew's bin directory, or another
+supported location.
+
+```sh
+codexmeter
+codexmeter --list-meters
+codexmeter --meter codex.primary
+codexmeter --json
+```
+
+Text output shows every available meter by default. Select meters by their stable IDs with repeatable `--meter` flags.
+JSON output uses a versioned schema and includes unavailable meters so scripts can distinguish unavailable data from a
+meter that was not returned. Run `codexmeter --help` for the complete option list.
+
 ## Development
 
 Open `CodexMeter.xcodeproj` in Xcode and run the `CodexMeter` scheme.

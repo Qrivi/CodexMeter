@@ -7,6 +7,7 @@ final class PreferencesStore {
         static let menuBarColorMode: UsageColorMode = .monochrome
         static let meterColorMode: UsageColorMode = .colorful
         static let remainingLabelColorMode: UsageColorMode = .colorfulWhenLow
+        static let cliInstallPath = CLIInstallLocation.default.path
         static let pollOnMenuOpen = true
         static let launchAtLoginEnabled = false
     }
@@ -19,6 +20,7 @@ final class PreferencesStore {
         static let meterColorMode = "meterColorMode"
         static let remainingLabelColorMode = "remainingLabelColorMode"
         static let meterPreferences = "meterPreferences.v2"
+        static let cliInstallPath = "cliInstallPath"
         static let pollOnMenuOpen = "pollOnMenuOpen"
         static let launchAtLoginEnabled = "launchAtLoginEnabled"
     }
@@ -106,6 +108,19 @@ final class PreferencesStore {
             }
 
             userDefaults.set(data, forKey: Key.meterPreferences)
+        }
+    }
+
+    var cliInstallPath: String {
+        get {
+            guard let path = userDefaults.string(forKey: Key.cliInstallPath), path.isEmpty == false else {
+                return Default.cliInstallPath
+            }
+
+            return path
+        }
+        set {
+            userDefaults.set(newValue, forKey: Key.cliInstallPath)
         }
     }
 
