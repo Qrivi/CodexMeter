@@ -133,6 +133,7 @@ struct AppearanceSettingsPane: View {
 
 struct MeterSettingsPane: View {
     @ObservedObject var viewModel: UsageViewModel
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
 
     var body: some View {
         SettingsPaneContainer {
@@ -167,13 +168,15 @@ struct MeterSettingsPane: View {
 
     @ViewBuilder
     private func meterSettingsBlock(for meter: UsageMeterViewData) -> some View {
+        let isVisible = viewModel.preferences(for: meter.id).isVisible
+
         VStack(alignment: .leading, spacing: 12) {
             Text(meter.title)
                 .font(.headline)
 
             SettingsToggleRow(
                 title: "Show meter",
-                description: "Show or hide this meter in the CodexMeter menu.",
+                description: "Show or hide this meter in the menu bar app.",
                 isOn: visibilityBinding(for: meter.id)
             )
             .disabled(meter.isAvailable == false)
@@ -182,33 +185,53 @@ struct MeterSettingsPane: View {
                 Label("This usage meter is currently not available.", systemImage: "info.circle")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-            } else if viewModel.preferences(for: meter.id).isVisible && meter.supportsNotifications {
-                SettingsPickerRow(
-                    title: "Low usage notification",
-                    description: "Notify when this meter reaches the selected remaining percentage.",
-                    selection: notificationThresholdBinding(for: meter.id),
-                    options: [nil] + NotificationThreshold.allCases.map(Optional.some),
-                    label: { threshold in threshold?.title ?? "Off" }
-                )
+            } else if isVisible && meter.supportsNotifications {
+                VStack(alignment: .leading, spacing: 12) {
+                    SettingsPickerRow(
+                        title: "Low usage notification",
+                        description: "Notify when the remaining percentage is reached.",
+                        selection: notificationThresholdBinding(for: meter.id),
+                        options: [nil] + NotificationThreshold.allCases.map(Optional.some),
+                        label: { threshold in threshold?.title ?? "Off" }
+                    )
 
-                SettingsToggleRow(
-                    title: "Notify when limit resets",
-                    description: "Notify after this meter returns to a full allowance.",
-                    isOn: resetNotificationsBinding(for: meter.id)
-                )
-            } else if viewModel.preferences(for: meter.id).isVisible {
+                    SettingsToggleRow(
+                        title: "Limit reset notification",
+                        description: "Notify after this meter returns to a full allowance.",
+                        isOn: resetNotificationsBinding(for: meter.id)
+                    )
+                }
+                .transition(meterDetailsTransition)
+            } else if isVisible {
                 Label("Usage notifications are not available for credits.", systemImage: "info.circle")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                    .transition(meterDetailsTransition)
             }
         }
         .padding(.vertical, 4)
     }
 
+    private var meterDetailsTransition: AnyTransition {
+        accessibilityReduceMotion
+            ? .opacity
+            : .opacity.combined(with: .offset(y: -8))
+    }
+
+    private var meterDetailsAnimation: Animation {
+        accessibilityReduceMotion
+            ? .easeOut(duration: 0.12)
+            : .snappy(duration: 0.25)
+    }
+
     private func visibilityBinding(for meterID: UsageMeterID) -> Binding<Bool> {
         Binding(
             get: { viewModel.preferences(for: meterID).isVisible },
-            set: { viewModel.setMeterVisible($0, meterID: meterID) }
+            set: { isVisible in
+                withAnimation(meterDetailsAnimation) {
+                    viewModel.setMeterVisible(isVisible, meterID: meterID)
+                }
+            }
         )
     }
 
