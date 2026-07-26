@@ -12,7 +12,8 @@ enum PreviewSupport {
             remainingPercent: 64,
             level: .good,
             resetDate: Date(timeIntervalSince1970: 1_778_070_900),
-            isAvailable: true
+            isAvailable: true,
+            compactTitle: "5 hour"
         ),
         UsageMeterViewData(
             id: .secondary,
@@ -23,7 +24,8 @@ enum PreviewSupport {
             remainingPercent: 18,
             level: .critical,
             resetDate: Date(timeIntervalSince1970: 1_778_141_800),
-            isAvailable: true
+            isAvailable: true,
+            compactTitle: "Weekly"
         ),
         UsageMeterViewData(
             id: .credits,

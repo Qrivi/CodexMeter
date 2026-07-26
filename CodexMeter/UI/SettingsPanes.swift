@@ -69,8 +69,10 @@ struct AppearanceSettingsPane: View {
                     title: "Usage shown in menu bar",
                     description: "Choose which usage value is always visible next to the menu bar title.",
                     selection: menuBarDisplayModeBinding,
-                    options: MenuBarDisplayMode.allCases,
-                    label: { viewModel.menuBarDisplayTitle(for: $0) }
+                    options: viewModel.menuBarDisplayOptions,
+                    label: { viewModel.menuBarDisplayTitle(for: $0) },
+                    isEnabled: { viewModel.isMenuBarDisplayModeEnabled($0) },
+                    showsDividerBefore: { viewModel.menuBarDisplayDividerOptions.contains($0) }
                 )
 
                 SettingsPickerRow(
@@ -78,7 +80,8 @@ struct AppearanceSettingsPane: View {
                     description: "Control how the compact menu bar numbers use warning colors.",
                     selection: menuBarColorModeBinding,
                     options: UsageColorMode.allCases,
-                    label: \.menuTitle
+                    label: \.menuTitle,
+                    showsDividerBefore: { $0 == .colorful }
                 )
             }
 
@@ -88,7 +91,8 @@ struct AppearanceSettingsPane: View {
                     description: "Choose how the progress meters inside the menu window are tinted.",
                     selection: meterColorModeBinding,
                     options: UsageColorMode.allCases,
-                    label: \.menuTitle
+                    label: \.menuTitle,
+                    showsDividerBefore: { $0 == .colorful }
                 )
 
                 SettingsPickerRow(
@@ -96,7 +100,8 @@ struct AppearanceSettingsPane: View {
                     description: "Choose how the remaining percentage labels above each meter are colored.",
                     selection: remainingLabelColorModeBinding,
                     options: UsageColorMode.allCases,
-                    label: \.menuTitle
+                    label: \.menuTitle,
+                    showsDividerBefore: { $0 == .colorful }
                 )
             }
         }
@@ -192,7 +197,8 @@ struct MeterSettingsPane: View {
                         description: "Notify when the remaining percentage is reached.",
                         selection: notificationThresholdBinding(for: meter.id),
                         options: [nil] + NotificationThreshold.allCases.map(Optional.some),
-                        label: { threshold in threshold?.title ?? "Off" }
+                        label: { threshold in threshold?.title ?? "Off" },
+                        showsDividerBefore: { $0 == .some(.twenty) }
                     )
 
                     SettingsToggleRow(

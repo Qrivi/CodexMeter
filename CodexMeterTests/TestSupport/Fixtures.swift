@@ -19,7 +19,8 @@ func makeSnapshot(
             remainingPercent: fiveHourRemaining,
             level: UsageFormatting.level(for: fiveHourRemaining),
             resetDate: fiveHourReset,
-            isAvailable: true
+            isAvailable: true,
+            compactTitle: "5 hour"
         ),
         UsageMeterViewData(
             id: .secondary,
@@ -30,7 +31,8 @@ func makeSnapshot(
             remainingPercent: weeklyRemaining,
             level: UsageFormatting.level(for: weeklyRemaining),
             resetDate: weeklyReset,
-            isAvailable: true
+            isAvailable: true,
+            compactTitle: "Weekly"
         ),
         UsageMeterViewData(
             id: .credits,

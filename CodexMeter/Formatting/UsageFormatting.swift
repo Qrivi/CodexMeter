@@ -84,6 +84,9 @@ enum UsageFormatting {
         now: Date = Date()
     ) -> UsageMeterViewData {
         let title = meterTitle(for: window, slot: slot, namePrefix: namePrefix)
+        let compactTitle = window.flatMap {
+            compactWindowDurationTitle(for: $0)
+        }
         guard let window,
               let remainingPercent = remainingPercent(from: window.usedPercent) else {
             return UsageMeterViewData(
@@ -95,7 +98,8 @@ enum UsageFormatting {
                 remainingPercent: nil,
                 level: .neutral,
                 resetDate: nil,
-                isAvailable: false
+                isAvailable: false,
+                compactTitle: compactTitle
             )
         }
 
@@ -110,7 +114,8 @@ enum UsageFormatting {
             remainingPercent: remainingPercent,
             level: level(for: remainingPercent),
             resetDate: resetDate,
-            isAvailable: true
+            isAvailable: true,
+            compactTitle: compactTitle
         )
     }
 
@@ -150,6 +155,11 @@ enum UsageFormatting {
         default:
             return nil
         }
+    }
+
+    static func compactWindowDurationTitle(for window: UsageWindow) -> String? {
+        windowDurationTitle(for: window)?
+            .replacingOccurrences(of: " limit", with: "")
     }
 
     static func durationTitle(seconds: Int) -> String? {
@@ -323,6 +333,24 @@ enum UsageFormatting {
             .joined()
     }
 
+    static func menuBarTitle(
+        snapshot: UsageSnapshot?,
+        mode: MenuBarDisplayMode
+    ) -> String {
+        switch mode {
+        case .both:
+            "Limits"
+        case .credits:
+            "Credits"
+        case .primaryRemaining:
+            snapshot?.meter(id: .primary)?.compactTitle ?? "Limits"
+        case .secondaryRemaining:
+            snapshot?.meter(id: .secondary)?.compactTitle ?? "Limits"
+        case let .meter(meterID):
+            snapshot?.meter(id: meterID)?.compactTitle ?? "Limits"
+        }
+    }
+
     static func menuBarLabelSegments(
         snapshot: UsageSnapshot?,
         mode: MenuBarDisplayMode,
@@ -359,6 +387,8 @@ enum UsageFormatting {
         case .credits:
             let value = snapshot.meter(id: .credits)?.valueText ?? "Unavailable"
             return [MenuBarLabelSegment(text: creditsStatusLabel(from: value), tone: .neutral)]
+        case let .meter(meterID):
+            return [meterSegment(for: snapshot.meter(id: meterID), colorMode: colorMode)]
         }
     }
 

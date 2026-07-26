@@ -24,10 +24,14 @@ struct PreferencesStoreTests {
     func persistsAndReloadsValues() {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
+        let sparkMeterID = UsageMeterID.additional(
+            feature: "codex_bengalfox",
+            slot: .secondary
+        )
 
         var store = PreferencesStore(userDefaults: defaults)
         store.pollingInterval = .minutes10
-        store.menuBarDisplayMode = .both
+        store.menuBarDisplayMode = .meter(sparkMeterID)
         store.menuBarColorMode = .colorfulWhenLow
         store.meterColorMode = .monochrome
         store.remainingLabelColorMode = .colorful
@@ -44,7 +48,7 @@ struct PreferencesStoreTests {
         store = PreferencesStore(userDefaults: defaults)
 
         #expect(store.pollingInterval == .minutes10)
-        #expect(store.menuBarDisplayMode == .both)
+        #expect(store.menuBarDisplayMode == .meter(sparkMeterID))
         #expect(store.menuBarColorMode == .colorfulWhenLow)
         #expect(store.meterColorMode == .monochrome)
         #expect(store.remainingLabelColorMode == .colorful)

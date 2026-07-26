@@ -106,6 +106,32 @@ struct FormattingTests {
     }
 
     @Test
+    func derivesCompactMenuBarLabelsOnlyFromCleanDurations() {
+        let fiveHourWindow = UsageWindow(
+            usedPercent: 0,
+            limitWindowSeconds: 18_000,
+            resetAfterSeconds: nil,
+            resetAt: nil
+        )
+        let weeklyWindow = UsageWindow(
+            usedPercent: 0,
+            limitWindowSeconds: 604_800,
+            resetAfterSeconds: nil,
+            resetAt: nil
+        )
+        let unmappableWindow = UsageWindow(
+            usedPercent: 0,
+            limitWindowSeconds: 90,
+            resetAfterSeconds: nil,
+            resetAt: nil
+        )
+
+        #expect(UsageFormatting.compactWindowDurationTitle(for: fiveHourWindow) == "5 hour")
+        #expect(UsageFormatting.compactWindowDurationTitle(for: weeklyWindow) == "Weekly")
+        #expect(UsageFormatting.compactWindowDurationTitle(for: unmappableWindow) == nil)
+    }
+
+    @Test
     func addsDurationToAdditionalMeterTitleOnlyWhenNeededToDisambiguateWindows() {
         let weeklyWindow = UsageWindow(
             usedPercent: 0,
@@ -196,6 +222,69 @@ struct FormattingTests {
 
         #expect(creditsSegments == [MenuBarLabelSegment(text: "12 cr", tone: .neutral)])
         #expect(fallbackSegments == [MenuBarLabelSegment(text: "…", tone: .neutral)])
+    }
+
+    @Test
+    func buildsMenuBarTitleAndSegmentsForDynamicMeters() {
+        let sparkMeterID = UsageMeterID.additional(
+            feature: "codex_bengalfox",
+            slot: .secondary
+        )
+        let sparkMeter = UsageMeterViewData(
+            id: sparkMeterID,
+            kind: .rateLimit,
+            title: "GPT-5.3-Codex-Spark · 5 hour limit",
+            valueText: "42% remaining",
+            resetText: nil,
+            remainingPercent: 42,
+            level: .warning,
+            resetDate: nil,
+            isAvailable: true,
+            compactTitle: "5 hour"
+        )
+        let snapshot = UsageSnapshot(
+            meters: makeSnapshot().meters + [sparkMeter],
+            lastUpdated: Date(),
+            warningMessage: nil
+        )
+        let mode = MenuBarDisplayMode.meter(sparkMeterID)
+
+        #expect(UsageFormatting.menuBarTitle(snapshot: snapshot, mode: .primaryRemaining) == "5 hour")
+        #expect(UsageFormatting.menuBarTitle(snapshot: snapshot, mode: .secondaryRemaining) == "Weekly")
+        #expect(UsageFormatting.menuBarTitle(snapshot: snapshot, mode: .both) == "Limits")
+        #expect(UsageFormatting.menuBarTitle(snapshot: snapshot, mode: mode) == "5 hour")
+        #expect(UsageFormatting.menuBarLabelSegments(
+            snapshot: snapshot,
+            mode: mode,
+            colorMode: .monochrome,
+            state: .loaded
+        ) == [MenuBarLabelSegment(text: "42%", tone: .neutral)])
+    }
+
+    @Test
+    func fallsBackToLimitsForUnknownMenuBarDuration() {
+        let meterID = UsageMeterID.additional(feature: "custom", slot: .primary)
+        let meter = UsageMeterViewData(
+            id: meterID,
+            kind: .rateLimit,
+            title: "Custom usage",
+            valueText: "50% remaining",
+            resetText: nil,
+            remainingPercent: 50,
+            level: .warning,
+            resetDate: nil,
+            isAvailable: true
+        )
+        let snapshot = UsageSnapshot(
+            meters: [meter],
+            lastUpdated: Date(),
+            warningMessage: nil
+        )
+
+        #expect(UsageFormatting.menuBarTitle(
+            snapshot: snapshot,
+            mode: .meter(meterID)
+        ) == "Limits")
     }
 
     @Test

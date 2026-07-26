@@ -43,6 +43,31 @@ struct UsageMeterViewData: Equatable, Identifiable, Sendable {
     let level: UsageLevel
     let resetDate: Date?
     let isAvailable: Bool
+    let compactTitle: String?
+
+    nonisolated init(
+        id: UsageMeterID,
+        kind: UsageMeterKind,
+        title: String,
+        valueText: String,
+        resetText: String?,
+        remainingPercent: Int?,
+        level: UsageLevel,
+        resetDate: Date?,
+        isAvailable: Bool,
+        compactTitle: String? = nil
+    ) {
+        self.id = id
+        self.kind = kind
+        self.title = title
+        self.valueText = valueText
+        self.resetText = resetText
+        self.remainingPercent = remainingPercent
+        self.level = level
+        self.resetDate = resetDate
+        self.isAvailable = isAvailable
+        self.compactTitle = compactTitle
+    }
 
     nonisolated var supportsNotifications: Bool {
         switch kind {

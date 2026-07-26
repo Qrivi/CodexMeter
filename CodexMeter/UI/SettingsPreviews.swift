@@ -50,7 +50,13 @@ struct AppearanceSettingsPreview: View {
 
             Spacer(minLength: 12)
 
-            MenuBarItemPreview(title: menuBarDisplayMode.menuBarTitle, segments: segments)
+            MenuBarItemPreview(
+                title: UsageFormatting.menuBarTitle(
+                    snapshot: snapshot,
+                    mode: menuBarDisplayMode
+                ),
+                segments: segments
+            )
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -147,7 +153,9 @@ struct AppearanceSettingsPreview: View {
             remainingPercent: remainingPercent,
             level: level,
             resetDate: nil,
-            isAvailable: true
+            isAvailable: true,
+            compactTitle: title
+                .replacingOccurrences(of: " limit", with: "")
         )
     }
 }

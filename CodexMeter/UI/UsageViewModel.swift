@@ -78,14 +78,38 @@ final class UsageViewModel: ObservableObject {
     }
 
     var menuBarTitle: String {
-        switch menuBarDisplayMode {
-        case .primaryRemaining:
-            compactMenuBarTitle(for: snapshot?.meter(id: .primary)) ?? menuBarDisplayMode.menuBarTitle
-        case .secondaryRemaining:
-            compactMenuBarTitle(for: snapshot?.meter(id: .secondary)) ?? menuBarDisplayMode.menuBarTitle
-        case .both, .credits:
-            menuBarDisplayMode.menuBarTitle
+        UsageFormatting.menuBarTitle(snapshot: snapshot, mode: menuBarDisplayMode)
+    }
+
+    var menuBarDisplayOptions: [MenuBarDisplayMode] {
+        var options: [MenuBarDisplayMode] = [
+            .both,
+            .primaryRemaining,
+            .secondaryRemaining
+        ]
+        if let snapshot {
+            options.append(contentsOf: snapshot.additionalRateLimitMeters.map {
+                .meter($0.id)
+            })
+        } else if case .meter = menuBarDisplayMode {
+            // Keep a persisted dynamic selection valid while the first refresh is loading.
+            options.append(menuBarDisplayMode)
         }
+        options.append(.credits)
+        return options
+    }
+
+    var menuBarDisplayDividerOptions: Set<MenuBarDisplayMode> {
+        var dividers: Set<MenuBarDisplayMode> = [.credits]
+        if let firstAdditionalMeter = menuBarDisplayOptions.first(where: {
+            if case .meter = $0 {
+                return true
+            }
+            return false
+        }) {
+            dividers.insert(firstAdditionalMeter)
+        }
+        return dividers
     }
 
     func menuBarDisplayTitle(for mode: MenuBarDisplayMode) -> String {
@@ -96,7 +120,17 @@ final class UsageViewModel: ObservableObject {
             snapshot?.meter(id: .secondary)?.title ?? mode.menuTitle
         case .both, .credits:
             mode.menuTitle
+        case let .meter(meterID):
+            snapshot?.meter(id: meterID)?.title ?? mode.menuTitle
         }
+    }
+
+    func isMenuBarDisplayModeEnabled(_ mode: MenuBarDisplayMode) -> Bool {
+        guard let snapshot else {
+            return true
+        }
+
+        return isMenuBarDisplayModeEnabled(mode, in: snapshot)
     }
 
     var isLoadingWithoutSnapshot: Bool {
@@ -150,6 +184,10 @@ final class UsageViewModel: ObservableObject {
     }
 
     func selectMenuBarDisplayMode(_ mode: MenuBarDisplayMode) {
+        guard isMenuBarDisplayModeEnabled(mode) else {
+            return
+        }
+
         menuBarDisplayMode = mode
         preferencesStore.menuBarDisplayMode = mode
     }
@@ -292,6 +330,7 @@ final class UsageViewModel: ObservableObject {
 
                     snapshot = freshSnapshot
                     loadState = .loaded
+                    reconcileMenuBarDisplayMode(with: freshSnapshot)
                     return Dictionary(uniqueKeysWithValues: freshSnapshot.meters.map { meter in
                         (meter.id, self.preferences(for: meter.id))
                     })
@@ -356,14 +395,42 @@ final class UsageViewModel: ObservableObject {
         preferencesStore.meterPreferences = meterPreferences
     }
 
-    private func compactMenuBarTitle(for meter: UsageMeterViewData?) -> String? {
-        guard let title = meter?.title else {
-            return nil
+    private func reconcileMenuBarDisplayMode(with snapshot: UsageSnapshot) {
+        guard isMenuBarDisplayModeEnabled(menuBarDisplayMode, in: snapshot) == false else {
+            return
         }
 
-        return title
-            .replacingOccurrences(of: " usage limit", with: "")
-            .replacingOccurrences(of: " limit", with: "")
+        let fallbackMode: MenuBarDisplayMode
+        if snapshot.mainRateLimitMeters.contains(where: \.isAvailable) {
+            fallbackMode = .both
+        } else if let additionalMeter = snapshot.additionalRateLimitMeters.first(where: \.isAvailable) {
+            fallbackMode = .meter(additionalMeter.id)
+        } else if snapshot.creditsMeter?.isAvailable == true {
+            fallbackMode = .credits
+        } else {
+            fallbackMode = .both
+        }
+
+        menuBarDisplayMode = fallbackMode
+        preferencesStore.menuBarDisplayMode = fallbackMode
+    }
+
+    private func isMenuBarDisplayModeEnabled(
+        _ mode: MenuBarDisplayMode,
+        in snapshot: UsageSnapshot
+    ) -> Bool {
+        switch mode {
+        case .both:
+            snapshot.mainRateLimitMeters.contains(where: \.isAvailable)
+        case .primaryRemaining:
+            snapshot.meter(id: .primary)?.isAvailable == true
+        case .secondaryRemaining:
+            snapshot.meter(id: .secondary)?.isAvailable == true
+        case .credits:
+            snapshot.creditsMeter?.isAvailable == true
+        case let .meter(meterID):
+            snapshot.meter(id: meterID)?.isAvailable == true
+        }
     }
 
     private func schedulePolling() {

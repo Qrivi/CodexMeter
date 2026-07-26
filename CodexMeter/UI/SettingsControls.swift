@@ -22,6 +22,8 @@ struct SettingsPickerRow<Value: Hashable, Preview: View>: View {
     let selection: Binding<Value>
     let options: [Value]
     let label: (Value) -> String
+    let isEnabled: (Value) -> Bool
+    let showsDividerBefore: (Value) -> Bool
     let preview: () -> Preview
 
     init(
@@ -30,6 +32,8 @@ struct SettingsPickerRow<Value: Hashable, Preview: View>: View {
         selection: Binding<Value>,
         options: [Value],
         label: @escaping (Value) -> String,
+        isEnabled: @escaping (Value) -> Bool = { _ in true },
+        showsDividerBefore: @escaping (Value) -> Bool = { _ in false },
         @ViewBuilder preview: @escaping () -> Preview
     ) {
         self.title = title
@@ -37,16 +41,44 @@ struct SettingsPickerRow<Value: Hashable, Preview: View>: View {
         self.selection = selection
         self.options = options
         self.label = label
+        self.isEnabled = isEnabled
+        self.showsDividerBefore = showsDividerBefore
         self.preview = preview
+    }
+
+    private var optionSections: [[Value]] {
+        options.reduce(into: []) { sections, option in
+            if sections.isEmpty || showsDividerBefore(option) {
+                sections.append([])
+            }
+            sections[sections.index(before: sections.endIndex)].append(option)
+        }
+    }
+
+    private var validatedSelection: Binding<Value> {
+        Binding(
+            get: { selection.wrappedValue },
+            set: { newValue in
+                guard isEnabled(newValue) else {
+                    return
+                }
+                selection.wrappedValue = newValue
+            }
+        )
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             LabeledContent {
-                Picker(title, selection: selection) {
-                    ForEach(options, id: \.self) { option in
-                        Text(label(option))
-                            .tag(option)
+                Picker(title, selection: validatedSelection) {
+                    ForEach(Array(optionSections.enumerated()), id: \.offset) { _, section in
+                        Section {
+                            ForEach(section, id: \.self) { option in
+                                Text(label(option))
+                                    .tag(option)
+                                    .selectionDisabled(isEnabled(option) == false)
+                            }
+                        }
                     }
                 }
                 .labelsHidden()
@@ -66,7 +98,9 @@ extension SettingsPickerRow where Preview == EmptyView {
         description: String,
         selection: Binding<Value>,
         options: [Value],
-        label: @escaping (Value) -> String
+        label: @escaping (Value) -> String,
+        isEnabled: @escaping (Value) -> Bool = { _ in true },
+        showsDividerBefore: @escaping (Value) -> Bool = { _ in false }
     ) {
         self.init(
             title: title,
@@ -74,6 +108,8 @@ extension SettingsPickerRow where Preview == EmptyView {
             selection: selection,
             options: options,
             label: label,
+            isEnabled: isEnabled,
+            showsDividerBefore: showsDividerBefore,
             preview: { EmptyView() }
         )
     }
