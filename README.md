@@ -5,8 +5,8 @@
 CodexMeter is a macOS menu bar companion for keeping Codex usage visible at all times.
 
 It reads your local Codex auth session, fetches the Codex usage endpoint, and shows every usage limit returned for your
-plan, including additional model-specific limits, reset times, and credits. The menu bar label can show either main
-usage window, both windows, or credits, with configurable monochrome and warning color modes.
+plan, including additional model-specific limits, reset times, and credits. The menu bar label can show either a main
+usage window, both main windows, any additional meter, or credits, with configurable monochrome and warning color modes.
 
 The menu includes quick refresh, shortcuts to Codex and the usage dashboard, stale/error status, and a settings window
 for polling, launch at login, menu-open refreshes, appearance, and meters. Each available meter can be shown or hidden
