@@ -204,6 +204,16 @@ final class UsageViewModel: ObservableObject {
         }
     }
 
+    func meterEmptyStateMessage(in snapshot: UsageSnapshot) -> String {
+        let hasEnabledMeter = snapshot.meters.contains { meter in
+            preferences(for: meter.id).isVisible
+        }
+
+        return hasEnabledMeter
+            ? "No usage meters are currently available."
+            : "No meters are enabled. You can enable meters in Settings."
+    }
+
     func setMeterVisible(_ isVisible: Bool, meterID: UsageMeterID) {
         updatePreferences(for: meterID) { preferences in
             preferences.isVisible = isVisible

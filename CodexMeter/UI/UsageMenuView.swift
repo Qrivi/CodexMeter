@@ -57,7 +57,7 @@ struct UsageMenuView: View {
             let visibleMeters = viewModel.visibleMeters(in: snapshot)
 
             if visibleMeters.isEmpty {
-                Text("No meters are enabled. You can enable meters in Settings.")
+                Text(viewModel.meterEmptyStateMessage(in: snapshot))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

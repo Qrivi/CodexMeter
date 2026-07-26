@@ -194,6 +194,43 @@ struct UsageViewModelTests {
 
     @MainActor
     @Test
+    func distinguishesUnavailableMetersFromDisabledMetersInEmptyState() {
+        let unavailableMeter = UsageMeterViewData(
+            id: .primary,
+            kind: .rateLimit,
+            title: "Main window",
+            valueText: "Unavailable",
+            resetText: nil,
+            remainingPercent: nil,
+            level: .neutral,
+            resetDate: nil,
+            isAvailable: false
+        )
+        let snapshot = UsageSnapshot(
+            meters: [unavailableMeter],
+            lastUpdated: Date(),
+            warningMessage: nil
+        )
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(snapshot)])
+        )
+
+        #expect(viewModel.visibleMeters(in: snapshot).isEmpty)
+        #expect(
+            viewModel.meterEmptyStateMessage(in: snapshot)
+                == "No usage meters are currently available."
+        )
+
+        viewModel.setMeterVisible(false, meterID: .primary)
+
+        #expect(
+            viewModel.meterEmptyStateMessage(in: snapshot)
+                == "No meters are enabled. You can enable meters in Settings."
+        )
+    }
+
+    @MainActor
+    @Test
     func menuOpenedRefreshesWhenPollOnMenuOpenIsEnabled() async throws {
         let tracker = RefreshTracker()
         let service = BlockingUsageFetcher(tracker: tracker, snapshot: makeSnapshot())
