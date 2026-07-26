@@ -69,8 +69,10 @@ struct AppearanceSettingsPane: View {
                     title: "Usage shown in menu bar",
                     description: "Choose which usage value is always visible next to the menu bar title.",
                     selection: menuBarDisplayModeBinding,
-                    options: MenuBarDisplayMode.allCases,
-                    label: \.menuTitle
+                    options: viewModel.menuBarDisplayOptions,
+                    label: { viewModel.menuBarDisplayTitle(for: $0) },
+                    isEnabled: { viewModel.isMenuBarDisplayModeEnabled($0) },
+                    showsDividerBefore: { viewModel.menuBarDisplayDividerOptions.contains($0) }
                 )
 
                 SettingsPickerRow(
@@ -78,7 +80,8 @@ struct AppearanceSettingsPane: View {
                     description: "Control how the compact menu bar numbers use warning colors.",
                     selection: menuBarColorModeBinding,
                     options: UsageColorMode.allCases,
-                    label: \.menuTitle
+                    label: \.menuTitle,
+                    showsDividerBefore: { $0 == .colorful }
                 )
             }
 
@@ -88,7 +91,8 @@ struct AppearanceSettingsPane: View {
                     description: "Choose how the progress meters inside the menu window are tinted.",
                     selection: meterColorModeBinding,
                     options: UsageColorMode.allCases,
-                    label: \.menuTitle
+                    label: \.menuTitle,
+                    showsDividerBefore: { $0 == .colorful }
                 )
 
                 SettingsPickerRow(
@@ -96,7 +100,8 @@ struct AppearanceSettingsPane: View {
                     description: "Choose how the remaining percentage labels above each meter are colored.",
                     selection: remainingLabelColorModeBinding,
                     options: UsageColorMode.allCases,
-                    label: \.menuTitle
+                    label: \.menuTitle,
+                    showsDividerBefore: { $0 == .colorful }
                 )
             }
         }
@@ -131,40 +136,122 @@ struct AppearanceSettingsPane: View {
     }
 }
 
-struct NotificationSettingsPane: View {
+struct MeterSettingsPane: View {
     @ObservedObject var viewModel: UsageViewModel
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
 
     var body: some View {
         SettingsPaneContainer {
-            Section("Usage Limits") {
-                SettingsPickerRow(
-                    title: "Low usage notification",
-                    description: "Send a notification when either usage window falls below the selected remaining percentage.",
-                    selection: notificationThresholdBinding,
-                    options: [nil] + NotificationThreshold.allCases.map(Optional.some),
-                    label: { threshold in threshold?.title ?? "Off" }
-                )
+            if let snapshot = viewModel.snapshot {
+                Section("Main Rate Limits") {
+                    ForEach(snapshot.mainRateLimitMeters) { meter in
+                        meterSettingsBlock(for: meter)
+                    }
+                }
 
-                SettingsToggleRow(
-                    title: "Notify when limit resets",
-                    description: "Send a notification after a usage window returns to a full allowance.",
-                    isOn: resetNotificationsBinding
-                )
+                if snapshot.additionalRateLimitMeters.isEmpty == false {
+                    Section("Additional Rate Limits") {
+                        ForEach(snapshot.additionalRateLimitMeters) { meter in
+                            meterSettingsBlock(for: meter)
+                        }
+                    }
+                }
+
+                if let creditsMeter = snapshot.creditsMeter {
+                    Section("Credits") {
+                        meterSettingsBlock(for: creditsMeter)
+                    }
+                }
+            } else {
+                Section {
+                    Text("Usage meters will appear after CodexMeter loads your usage.")
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
 
-    private var notificationThresholdBinding: Binding<NotificationThreshold?> {
+    @ViewBuilder
+    private func meterSettingsBlock(for meter: UsageMeterViewData) -> some View {
+        let isVisible = viewModel.preferences(for: meter.id).isVisible
+
+        VStack(alignment: .leading, spacing: 12) {
+            Text(meter.title)
+                .font(.headline)
+
+            SettingsToggleRow(
+                title: "Show meter",
+                description: "Show or hide this meter in the menu bar app.",
+                isOn: visibilityBinding(for: meter.id)
+            )
+            .disabled(meter.isAvailable == false)
+
+            if meter.isAvailable == false {
+                Label("This usage meter is currently not available.", systemImage: "info.circle")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else if isVisible && meter.supportsNotifications {
+                VStack(alignment: .leading, spacing: 12) {
+                    SettingsPickerRow(
+                        title: "Low usage notification",
+                        description: "Notify when the remaining percentage is reached.",
+                        selection: notificationThresholdBinding(for: meter.id),
+                        options: [nil] + NotificationThreshold.allCases.map(Optional.some),
+                        label: { threshold in threshold?.title ?? "Off" },
+                        showsDividerBefore: { $0 == .some(.twenty) }
+                    )
+
+                    SettingsToggleRow(
+                        title: "Limit reset notification",
+                        description: "Notify after this meter returns to a full allowance.",
+                        isOn: resetNotificationsBinding(for: meter.id)
+                    )
+                }
+                .transition(meterDetailsTransition)
+            } else if isVisible {
+                Label("Usage notifications are not available for credits.", systemImage: "info.circle")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .transition(meterDetailsTransition)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var meterDetailsTransition: AnyTransition {
+        accessibilityReduceMotion
+            ? .opacity
+            : .opacity.combined(with: .offset(y: -8))
+    }
+
+    private var meterDetailsAnimation: Animation {
+        accessibilityReduceMotion
+            ? .easeOut(duration: 0.12)
+            : .snappy(duration: 0.25)
+    }
+
+    private func visibilityBinding(for meterID: UsageMeterID) -> Binding<Bool> {
         Binding(
-            get: { viewModel.limitNotificationThreshold },
-            set: { viewModel.selectNotificationThreshold($0) }
+            get: { viewModel.preferences(for: meterID).isVisible },
+            set: { isVisible in
+                withAnimation(meterDetailsAnimation) {
+                    viewModel.setMeterVisible(isVisible, meterID: meterID)
+                }
+            }
         )
     }
 
-    private var resetNotificationsBinding: Binding<Bool> {
+    private func notificationThresholdBinding(for meterID: UsageMeterID) -> Binding<NotificationThreshold?> {
         Binding(
-            get: { viewModel.resetNotificationsEnabled },
-            set: { viewModel.setResetNotificationsEnabled($0) }
+            get: { viewModel.preferences(for: meterID).notificationThreshold },
+            set: { viewModel.selectNotificationThreshold($0, meterID: meterID) }
+        )
+    }
+
+    private func resetNotificationsBinding(for meterID: UsageMeterID) -> Binding<Bool> {
+        Binding(
+            get: { viewModel.preferences(for: meterID).resetNotificationsEnabled },
+            set: { viewModel.setResetNotificationsEnabled($0, meterID: meterID) }
         )
     }
 }
@@ -324,9 +411,9 @@ struct SettingsPanes_Previews: PreviewProvider {
                 .frame(width: 520, height: 520)
                 .previewDisplayName("Appearance Settings")
 
-            NotificationSettingsPane(viewModel: PreviewSupport.viewModel())
+            MeterSettingsPane(viewModel: PreviewSupport.viewModel())
                 .frame(width: 520, height: 280)
-                .previewDisplayName("Notification Settings")
+                .previewDisplayName("Meter Settings")
 
             AboutSettingsPane()
                 .frame(width: 520, height: 280)

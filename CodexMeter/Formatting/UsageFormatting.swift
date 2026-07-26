@@ -2,39 +2,195 @@ import Foundation
 
 enum UsageFormatting {
     static func snapshot(from response: UsageResponse, now: Date = Date()) -> UsageSnapshot {
-        UsageSnapshot(
-            fiveHourSection: sectionData(for: response.rateLimit?.primaryWindow, kind: .fiveHour, now: now),
-            weeklySection: sectionData(for: response.rateLimit?.secondaryWindow, kind: .weekly, now: now),
-            creditsText: creditsText(from: response.credits),
-            lastUpdated: now,
-            warningMessage: nil
-        )
-    }
+        var meters = [
+            rateLimitMeter(
+                id: .primary,
+                window: response.rateLimit?.primaryWindow,
+                slot: .primary,
+                now: now
+            ),
+            rateLimitMeter(
+                id: .secondary,
+                window: response.rateLimit?.secondaryWindow,
+                slot: .secondary,
+                now: now
+            )
+        ]
 
-    static func sectionData(
-        for window: UsageWindow?,
-        kind: UsageWindowKind,
-        now: Date = Date()
-    ) -> UsageSectionViewData {
-        guard let window else {
-            return .unavailable(kind: kind)
+        for (index, additionalLimit) in (response.additionalRateLimits ?? []).enumerated() {
+            let displayName = nonEmpty(additionalLimit.limitName) ?? "Additional usage"
+            let feature = nonEmpty(additionalLimit.meteredFeature)
+                ?? "unknown-\(index)"
+            let windowCandidates: [(slot: RateLimitWindowSlot, window: UsageWindow?)] = [
+                (.primary, additionalLimit.rateLimit?.primaryWindow),
+                (.secondary, additionalLimit.rateLimit?.secondaryWindow)
+            ]
+            let windows = windowCandidates.compactMap { candidate in
+                candidate.window.map { (slot: candidate.slot, window: $0) }
+            }
+
+            for candidate in windows {
+                let title = additionalMeterTitle(
+                    displayName: displayName,
+                    window: candidate.window,
+                    slot: candidate.slot,
+                    showsDuration: windows.count > 1
+                )
+                meters.append(rateLimitMeter(
+                    id: .additional(feature: feature, slot: candidate.slot),
+                    window: candidate.window,
+                    slot: candidate.slot,
+                    namePrefix: title,
+                    now: now
+                ))
+            }
         }
 
-        guard let remainingPercent = remainingPercent(from: window.usedPercent) else {
-            return .unavailable(kind: kind)
+        let creditsValue = creditsText(from: response.credits)
+        meters.append(UsageMeterViewData(
+            id: .credits,
+            kind: .credits,
+            title: "Credits remaining",
+            valueText: creditsValue,
+            resetText: nil,
+            remainingPercent: nil,
+            level: .neutral,
+            resetDate: nil,
+            isAvailable: creditsValue != "Unavailable"
+        ))
+
+        return UsageSnapshot(meters: meters, lastUpdated: now, warningMessage: nil)
+    }
+
+    static func additionalMeterTitle(
+        displayName: String,
+        window: UsageWindow,
+        slot: RateLimitWindowSlot,
+        showsDuration: Bool
+    ) -> String {
+        guard showsDuration else {
+            return displayName
+        }
+
+        let duration = windowDurationTitle(for: window) ?? slot.fallbackTitle
+        return "\(displayName) · \(duration)"
+    }
+
+    static func rateLimitMeter(
+        id: UsageMeterID,
+        window: UsageWindow?,
+        slot: RateLimitWindowSlot,
+        namePrefix: String? = nil,
+        now: Date = Date()
+    ) -> UsageMeterViewData {
+        let title = meterTitle(for: window, slot: slot, namePrefix: namePrefix)
+        let compactTitle = window.flatMap {
+            compactWindowDurationTitle(for: $0)
+        }
+        guard let window,
+              let remainingPercent = remainingPercent(from: window.usedPercent) else {
+            return UsageMeterViewData(
+                id: id,
+                kind: .rateLimit,
+                title: title,
+                valueText: "Unavailable",
+                resetText: nil,
+                remainingPercent: nil,
+                level: .neutral,
+                resetDate: nil,
+                isAvailable: false,
+                compactTitle: compactTitle
+            )
         }
 
         let resetDate = resetDate(for: window, now: now)
 
-        return UsageSectionViewData(
-            title: kind.sectionTitle,
-            remainingText: "\(remainingPercent)% remaining",
+        return UsageMeterViewData(
+            id: id,
+            kind: .rateLimit,
+            title: title,
+            valueText: "\(remainingPercent)% remaining",
             resetText: resetText(resetDate: resetDate, now: now),
             remainingPercent: remainingPercent,
             level: level(for: remainingPercent),
             resetDate: resetDate,
-            windowKind: kind
+            isAvailable: true,
+            compactTitle: compactTitle
         )
+    }
+
+    static func meterTitle(
+        for window: UsageWindow?,
+        slot: RateLimitWindowSlot,
+        namePrefix: String? = nil
+    ) -> String {
+        if let namePrefix {
+            return namePrefix
+        }
+
+        let duration: String
+        if let window {
+            duration = windowDurationTitle(for: window) ?? slot.fallbackTitle
+        } else {
+            duration = slot.fallbackTitle
+        }
+        return duration
+    }
+
+    static func windowDurationTitle(for window: UsageWindow) -> String? {
+        if let seconds = window.limitWindowSeconds,
+           let title = durationTitle(seconds: seconds) {
+            return title
+        }
+
+        // reset_after_seconds is time remaining, so it is only safe as a fallback
+        // when it exactly identifies one of the common window durations.
+        switch window.resetAfterSeconds {
+        case 18_000:
+            return "5 hour limit"
+        case 86_400:
+            return "Daily limit"
+        case 604_800:
+            return "Weekly limit"
+        default:
+            return nil
+        }
+    }
+
+    static func compactWindowDurationTitle(for window: UsageWindow) -> String? {
+        windowDurationTitle(for: window)?
+            .replacingOccurrences(of: " limit", with: "")
+    }
+
+    static func durationTitle(seconds: Int) -> String? {
+        guard seconds > 0 else {
+            return nil
+        }
+
+        if seconds == 604_800 {
+            return "Weekly limit"
+        }
+
+        if seconds == 86_400 {
+            return "Daily limit"
+        }
+
+        if seconds.isMultiple(of: 86_400) {
+            let days = seconds / 86_400
+            return "\(days) day limit"
+        }
+
+        if seconds.isMultiple(of: 3_600) {
+            let hours = seconds / 3_600
+            return "\(hours) hour limit"
+        }
+
+        if seconds.isMultiple(of: 60) {
+            let minutes = seconds / 60
+            return "\(minutes) minute limit"
+        }
+
+        return nil
     }
 
     static func remainingPercent(from usedPercent: Double?) -> Int? {
@@ -177,6 +333,24 @@ enum UsageFormatting {
             .joined()
     }
 
+    static func menuBarTitle(
+        snapshot: UsageSnapshot?,
+        mode: MenuBarDisplayMode
+    ) -> String {
+        switch mode {
+        case .both:
+            "Limits"
+        case .credits:
+            "Credits"
+        case .primaryRemaining:
+            snapshot?.meter(id: .primary)?.compactTitle ?? "Limits"
+        case .secondaryRemaining:
+            snapshot?.meter(id: .secondary)?.compactTitle ?? "Limits"
+        case let .meter(meterID):
+            snapshot?.meter(id: meterID)?.compactTitle ?? "Limits"
+        }
+    }
+
     static func menuBarLabelSegments(
         snapshot: UsageSnapshot?,
         mode: MenuBarDisplayMode,
@@ -192,18 +366,29 @@ enum UsageFormatting {
         }
 
         switch mode {
-        case .fiveHourRemaining:
-            return [percentSegment(for: snapshot.fiveHourSection, colorMode: colorMode)]
-        case .weekRemaining:
-            return [percentSegment(for: snapshot.weeklySection, colorMode: colorMode)]
+        case .primaryRemaining:
+            return [meterSegment(for: snapshot.meter(id: .primary), colorMode: colorMode)]
+        case .secondaryRemaining:
+            return [meterSegment(for: snapshot.meter(id: .secondary), colorMode: colorMode)]
         case .both:
-            return [
-                percentSegment(for: snapshot.fiveHourSection, colorMode: colorMode),
-                MenuBarLabelSegment(text: "/", tone: .neutral),
-                percentSegment(for: snapshot.weeklySection, colorMode: colorMode)
-            ]
+            let availableMeters = [snapshot.meter(id: .primary), snapshot.meter(id: .secondary)]
+                .compactMap { $0 }
+                .filter(\.isAvailable)
+            guard availableMeters.isEmpty == false else {
+                return [MenuBarLabelSegment(text: "--", tone: .neutral)]
+            }
+
+            return availableMeters.enumerated().flatMap { index, meter in
+                let segment = meterSegment(for: meter, colorMode: colorMode)
+                return index == 0
+                    ? [segment]
+                    : [MenuBarLabelSegment(text: "/", tone: .neutral), segment]
+            }
         case .credits:
-            return [MenuBarLabelSegment(text: creditsStatusLabel(from: snapshot.creditsText), tone: .neutral)]
+            let value = snapshot.meter(id: .credits)?.valueText ?? "Unavailable"
+            return [MenuBarLabelSegment(text: creditsStatusLabel(from: value), tone: .neutral)]
+        case let .meter(meterID):
+            return [meterSegment(for: snapshot.meter(id: meterID), colorMode: colorMode)]
         }
     }
 
@@ -223,7 +408,7 @@ enum UsageFormatting {
     }
 
     static func menuBarTone(
-        for section: UsageSectionViewData,
+        for section: UsageMeterViewData,
         colorMode: UsageColorMode
     ) -> MenuBarTextTone {
         switch colorMode {
@@ -272,14 +457,27 @@ enum UsageFormatting {
         return "\(remainingPercent)%"
     }
 
-    private static func percentSegment(
-        for section: UsageSectionViewData,
+    private static func meterSegment(
+        for section: UsageMeterViewData?,
         colorMode: UsageColorMode
     ) -> MenuBarLabelSegment {
-        MenuBarLabelSegment(
+        guard let section else {
+            return MenuBarLabelSegment(text: "--", tone: .neutral)
+        }
+
+        return MenuBarLabelSegment(
             text: percentLabel(for: section.remainingPercent),
             tone: menuBarTone(for: section, colorMode: colorMode)
         )
+    }
+
+    private static func nonEmpty(_ value: String?) -> String? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              value.isEmpty == false else {
+            return nil
+        }
+
+        return value
     }
 
     private static func menuBarTone(for level: UsageLevel) -> MenuBarTextTone {

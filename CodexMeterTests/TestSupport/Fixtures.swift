@@ -9,25 +9,42 @@ func makeSnapshot(
     lastUpdated: Date = Date(timeIntervalSince1970: 1_778_054_820)
 ) -> UsageSnapshot {
     UsageSnapshot(
-        fiveHourSection: UsageSectionViewData(
-            title: "5 hour usage limit",
-            remainingText: "\(fiveHourRemaining)% remaining",
+        meters: [
+        UsageMeterViewData(
+            id: .primary,
+            kind: .rateLimit,
+            title: "5 hour limit",
+            valueText: "\(fiveHourRemaining)% remaining",
             resetText: "Resets 2:35 PM (4h 28m)",
             remainingPercent: fiveHourRemaining,
             level: UsageFormatting.level(for: fiveHourRemaining),
             resetDate: fiveHourReset,
-            windowKind: .fiveHour
+            isAvailable: true,
+            compactTitle: "5 hour"
         ),
-        weeklySection: UsageSectionViewData(
-            title: "Weekly usage limit",
-            remainingText: "\(weeklyRemaining)% remaining",
+        UsageMeterViewData(
+            id: .secondary,
+            kind: .rateLimit,
+            title: "Weekly limit",
+            valueText: "\(weeklyRemaining)% remaining",
             resetText: "Resets May 6, 2026 10:30 AM (1d 0h)",
             remainingPercent: weeklyRemaining,
             level: UsageFormatting.level(for: weeklyRemaining),
             resetDate: weeklyReset,
-            windowKind: .weekly
+            isAvailable: true,
+            compactTitle: "Weekly"
         ),
-        creditsText: "12",
+        UsageMeterViewData(
+            id: .credits,
+            kind: .credits,
+            title: "Credits remaining",
+            valueText: "12",
+            resetText: nil,
+            remainingPercent: nil,
+            level: .neutral,
+            resetDate: nil,
+            isAvailable: true
+        )],
         lastUpdated: lastUpdated,
         warningMessage: nil
     )

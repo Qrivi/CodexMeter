@@ -11,8 +11,7 @@ final class UsageViewModel: ObservableObject {
     @Published private(set) var menuBarColorMode: UsageColorMode
     @Published private(set) var meterColorMode: UsageColorMode
     @Published private(set) var remainingLabelColorMode: UsageColorMode
-    @Published private(set) var limitNotificationThreshold: NotificationThreshold?
-    @Published private(set) var resetNotificationsEnabled: Bool
+    @Published private(set) var meterPreferences: [UsageMeterID: MeterPreferences]
     @Published private(set) var pollOnMenuOpen: Bool
     @Published private(set) var launchAtLoginEnabled: Bool
     @Published private(set) var settingsErrorMessage: String?
@@ -53,8 +52,7 @@ final class UsageViewModel: ObservableObject {
         self.menuBarColorMode = preferencesStore.menuBarColorMode
         self.meterColorMode = preferencesStore.meterColorMode
         self.remainingLabelColorMode = preferencesStore.remainingLabelColorMode
-        self.limitNotificationThreshold = preferencesStore.limitNotificationThreshold
-        self.resetNotificationsEnabled = preferencesStore.resetNotificationsEnabled
+        self.meterPreferences = preferencesStore.meterPreferences
         self.pollOnMenuOpen = preferencesStore.pollOnMenuOpen
         self.launchAtLoginEnabled = loginItemService.isEnabled()
         preferencesStore.launchAtLoginEnabled = launchAtLoginEnabled
@@ -80,7 +78,59 @@ final class UsageViewModel: ObservableObject {
     }
 
     var menuBarTitle: String {
-        menuBarDisplayMode.menuBarTitle
+        UsageFormatting.menuBarTitle(snapshot: snapshot, mode: menuBarDisplayMode)
+    }
+
+    var menuBarDisplayOptions: [MenuBarDisplayMode] {
+        var options: [MenuBarDisplayMode] = [
+            .both,
+            .primaryRemaining,
+            .secondaryRemaining
+        ]
+        if let snapshot {
+            options.append(contentsOf: snapshot.additionalRateLimitMeters.map {
+                .meter($0.id)
+            })
+        } else if case .meter = menuBarDisplayMode {
+            // Keep a persisted dynamic selection valid while the first refresh is loading.
+            options.append(menuBarDisplayMode)
+        }
+        options.append(.credits)
+        return options
+    }
+
+    var menuBarDisplayDividerOptions: Set<MenuBarDisplayMode> {
+        var dividers: Set<MenuBarDisplayMode> = [.credits]
+        if let firstAdditionalMeter = menuBarDisplayOptions.first(where: {
+            if case .meter = $0 {
+                return true
+            }
+            return false
+        }) {
+            dividers.insert(firstAdditionalMeter)
+        }
+        return dividers
+    }
+
+    func menuBarDisplayTitle(for mode: MenuBarDisplayMode) -> String {
+        switch mode {
+        case .primaryRemaining:
+            snapshot?.meter(id: .primary)?.title ?? mode.menuTitle
+        case .secondaryRemaining:
+            snapshot?.meter(id: .secondary)?.title ?? mode.menuTitle
+        case .both, .credits:
+            mode.menuTitle
+        case let .meter(meterID):
+            snapshot?.meter(id: meterID)?.title ?? mode.menuTitle
+        }
+    }
+
+    func isMenuBarDisplayModeEnabled(_ mode: MenuBarDisplayMode) -> Bool {
+        guard let snapshot else {
+            return true
+        }
+
+        return isMenuBarDisplayModeEnabled(mode, in: snapshot)
     }
 
     var isLoadingWithoutSnapshot: Bool {
@@ -134,6 +184,10 @@ final class UsageViewModel: ObservableObject {
     }
 
     func selectMenuBarDisplayMode(_ mode: MenuBarDisplayMode) {
+        guard isMenuBarDisplayModeEnabled(mode) else {
+            return
+        }
+
         menuBarDisplayMode = mode
         preferencesStore.menuBarDisplayMode = mode
     }
@@ -178,22 +232,48 @@ final class UsageViewModel: ObservableObject {
         settingsErrorMessage = nil
     }
 
-    func selectNotificationThreshold(_ threshold: NotificationThreshold?) {
-        limitNotificationThreshold = threshold
-        preferencesStore.limitNotificationThreshold = threshold
+    func preferences(for meterID: UsageMeterID) -> MeterPreferences {
+        meterPreferences[meterID] ?? MeterPreferences()
+    }
+
+    func visibleMeters(in snapshot: UsageSnapshot) -> [UsageMeterViewData] {
+        snapshot.meters.filter { meter in
+            meter.isAvailable && preferences(for: meter.id).isVisible
+        }
+    }
+
+    func meterEmptyStateMessage(in snapshot: UsageSnapshot) -> String {
+        let hasEnabledMeter = snapshot.meters.contains { meter in
+            preferences(for: meter.id).isVisible
+        }
+
+        return hasEnabledMeter
+            ? "No usage meters are currently available."
+            : "No meters are enabled. You can enable meters in Settings."
+    }
+
+    func setMeterVisible(_ isVisible: Bool, meterID: UsageMeterID) {
+        updatePreferences(for: meterID) { preferences in
+            preferences.isVisible = isVisible
+        }
+    }
+
+    func selectNotificationThreshold(_ threshold: NotificationThreshold?, meterID: UsageMeterID) {
+        updatePreferences(for: meterID) { preferences in
+            preferences.notificationThreshold = threshold
+        }
 
         Task {
-            await notificationService.updateThreshold(threshold)
-
             if threshold != nil {
                 _ = await notificationService.requestAuthorizationIfNeeded()
             }
         }
     }
 
-    func setResetNotificationsEnabled(_ isEnabled: Bool) {
-        resetNotificationsEnabled = isEnabled
-        preferencesStore.resetNotificationsEnabled = isEnabled
+    func setResetNotificationsEnabled(_ isEnabled: Bool, meterID: UsageMeterID) {
+        updatePreferences(for: meterID) { preferences in
+            preferences.resetNotificationsEnabled = isEnabled
+        }
 
         guard isEnabled else {
             return
@@ -243,20 +323,22 @@ final class UsageViewModel: ObservableObject {
             do {
                 let freshSnapshot = try await usageService.fetchUsageSnapshot()
 
-                let notificationSettings: (NotificationThreshold?, Bool) = await MainActor.run { [weak self] in
+                let notificationSettings: [UsageMeterID: MeterPreferences] = await MainActor.run { [weak self] in
                     guard let self, Task.isCancelled == false else {
-                        return (nil, false)
+                        return [:]
                     }
 
                     snapshot = freshSnapshot
                     loadState = .loaded
-                    return (limitNotificationThreshold, resetNotificationsEnabled)
+                    reconcileMenuBarDisplayMode(with: freshSnapshot)
+                    return Dictionary(uniqueKeysWithValues: freshSnapshot.meters.map { meter in
+                        (meter.id, self.preferences(for: meter.id))
+                    })
                 }
 
                 await notificationService.evaluateNotifications(
                     for: freshSnapshot,
-                    threshold: notificationSettings.0,
-                    resetNotificationsEnabled: notificationSettings.1
+                    settings: notificationSettings
                 )
             } catch let error as UsageServiceError {
                 await MainActor.run { [weak self] in
@@ -300,6 +382,54 @@ final class UsageViewModel: ObservableObject {
             self.snapshot = snapshot.withMessages(warningMessage: message)
         } else {
             loadState = .failed(message: message)
+        }
+    }
+
+    private func updatePreferences(
+        for meterID: UsageMeterID,
+        change: (inout MeterPreferences) -> Void
+    ) {
+        var preferences = preferences(for: meterID)
+        change(&preferences)
+        meterPreferences[meterID] = preferences
+        preferencesStore.meterPreferences = meterPreferences
+    }
+
+    private func reconcileMenuBarDisplayMode(with snapshot: UsageSnapshot) {
+        guard isMenuBarDisplayModeEnabled(menuBarDisplayMode, in: snapshot) == false else {
+            return
+        }
+
+        let fallbackMode: MenuBarDisplayMode
+        if snapshot.mainRateLimitMeters.contains(where: \.isAvailable) {
+            fallbackMode = .both
+        } else if let additionalMeter = snapshot.additionalRateLimitMeters.first(where: \.isAvailable) {
+            fallbackMode = .meter(additionalMeter.id)
+        } else if snapshot.creditsMeter?.isAvailable == true {
+            fallbackMode = .credits
+        } else {
+            fallbackMode = .both
+        }
+
+        menuBarDisplayMode = fallbackMode
+        preferencesStore.menuBarDisplayMode = fallbackMode
+    }
+
+    private func isMenuBarDisplayModeEnabled(
+        _ mode: MenuBarDisplayMode,
+        in snapshot: UsageSnapshot
+    ) -> Bool {
+        switch mode {
+        case .both:
+            snapshot.mainRateLimitMeters.contains(where: \.isAvailable)
+        case .primaryRemaining:
+            snapshot.meter(id: .primary)?.isAvailable == true
+        case .secondaryRemaining:
+            snapshot.meter(id: .secondary)?.isAvailable == true
+        case .credits:
+            snapshot.creditsMeter?.isAvailable == true
+        case let .meter(meterID):
+            snapshot.meter(id: meterID)?.isAvailable == true
         }
     }
 

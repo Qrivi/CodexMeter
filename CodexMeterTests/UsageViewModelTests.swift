@@ -12,7 +12,7 @@ struct UsageViewModelTests {
         viewModel.start()
         try await waitUntil { viewModel.loadState == .loaded }
 
-        #expect(viewModel.snapshot?.fiveHourSection.remainingPercent == 64)
+        #expect(viewModel.snapshot?.meter(id: .primary)?.remainingPercent == 64)
         #expect(viewModel.loadState == .loaded)
     }
 
@@ -61,7 +61,7 @@ struct UsageViewModelTests {
         viewModel.refreshNow()
         try await waitUntil { viewModel.snapshot?.warningMessage == "Offline" }
 
-        #expect(viewModel.snapshot?.fiveHourSection.remainingPercent == initialSnapshot.fiveHourSection.remainingPercent)
+        #expect(viewModel.snapshot?.meter(id: .primary)?.remainingPercent == initialSnapshot.meter(id: .primary)?.remainingPercent)
         #expect(viewModel.snapshot?.warningMessage == "Offline")
         #expect(viewModel.menuBarText == "Error")
         #expect(viewModel.menuBarTextSegments == [MenuBarLabelSegment(text: "Error", tone: .critical)])
@@ -81,7 +81,7 @@ struct UsageViewModelTests {
         viewModel.refreshNow()
         try await waitUntil { viewModel.snapshot?.warningMessage == "Auth token unavailable. Open Codex to refresh it." }
 
-        #expect(viewModel.snapshot?.fiveHourSection.remainingPercent == initialSnapshot.fiveHourSection.remainingPercent)
+        #expect(viewModel.snapshot?.meter(id: .primary)?.remainingPercent == initialSnapshot.meter(id: .primary)?.remainingPercent)
         #expect(viewModel.snapshot?.warningMessage == "Auth token unavailable. Open Codex to refresh it.")
         #expect(viewModel.menuBarText == "Error")
         #expect(viewModel.menuBarTextSegments == [MenuBarLabelSegment(text: "Error", tone: .critical)])
@@ -133,6 +133,190 @@ struct UsageViewModelTests {
 
     @MainActor
     @Test
+    func offersEveryReturnedRateLimitAndDisablesUnavailableWindows() async throws {
+        let sparkPrimaryID = UsageMeterID.additional(
+            feature: "codex_bengalfox",
+            slot: .primary
+        )
+        let sparkSecondaryID = UsageMeterID.additional(
+            feature: "codex_bengalfox",
+            slot: .secondary
+        )
+        let unavailableSecondary = UsageMeterViewData(
+            id: .secondary,
+            kind: .rateLimit,
+            title: "Secondary window",
+            valueText: "Unavailable",
+            resetText: nil,
+            remainingPercent: nil,
+            level: .neutral,
+            resetDate: nil,
+            isAvailable: false
+        )
+        let sparkPrimary = UsageMeterViewData(
+            id: sparkPrimaryID,
+            kind: .rateLimit,
+            title: "GPT-5.3-Codex-Spark · Weekly limit",
+            valueText: "80% remaining",
+            resetText: nil,
+            remainingPercent: 80,
+            level: .good,
+            resetDate: nil,
+            isAvailable: true,
+            compactTitle: "Weekly"
+        )
+        let sparkSecondary = UsageMeterViewData(
+            id: sparkSecondaryID,
+            kind: .rateLimit,
+            title: "GPT-5.3-Codex-Spark · 5 hour limit",
+            valueText: "35% remaining",
+            resetText: nil,
+            remainingPercent: 35,
+            level: .warning,
+            resetDate: nil,
+            isAvailable: true,
+            compactTitle: "5 hour"
+        )
+        let baseSnapshot = makeSnapshot()
+        let snapshot = UsageSnapshot(
+            meters: [
+                baseSnapshot.meter(id: .primary)!,
+                unavailableSecondary,
+                sparkPrimary,
+                sparkSecondary,
+                baseSnapshot.meter(id: .credits)!
+            ],
+            lastUpdated: baseSnapshot.lastUpdated,
+            warningMessage: nil
+        )
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(snapshot)])
+        )
+
+        viewModel.refreshNow()
+        try await waitUntil { viewModel.loadState == .loaded }
+
+        #expect(viewModel.menuBarDisplayOptions == [
+            .both,
+            .primaryRemaining,
+            .secondaryRemaining,
+            .meter(sparkPrimaryID),
+            .meter(sparkSecondaryID),
+            .credits
+        ])
+        #expect(viewModel.menuBarDisplayDividerOptions == [
+            .meter(sparkPrimaryID),
+            .credits
+        ])
+        #expect(viewModel.menuBarDisplayTitle(for: .both) == "Main usage limits")
+        #expect(viewModel.menuBarDisplayTitle(for: .primaryRemaining) == "5 hour limit")
+        #expect(viewModel.menuBarDisplayTitle(for: .secondaryRemaining) == "Secondary window")
+        #expect(viewModel.isMenuBarDisplayModeEnabled(.primaryRemaining))
+        #expect(viewModel.isMenuBarDisplayModeEnabled(.secondaryRemaining) == false)
+        #expect(viewModel.isMenuBarDisplayModeEnabled(.meter(sparkPrimaryID)))
+        #expect(viewModel.isMenuBarDisplayModeEnabled(.meter(sparkSecondaryID)))
+
+        viewModel.selectMenuBarDisplayMode(.secondaryRemaining)
+
+        #expect(viewModel.menuBarDisplayMode == .both)
+
+        viewModel.selectMenuBarDisplayMode(.meter(sparkSecondaryID))
+
+        #expect(viewModel.menuBarTitle == "5 hour")
+        #expect(viewModel.menuBarText == "35%")
+    }
+
+    @MainActor
+    @Test
+    func fallsBackWhenStoredDynamicMeterDisappears() async throws {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        let store = PreferencesStore(userDefaults: defaults)
+        let missingMeterID = UsageMeterID.additional(
+            feature: "codex_bengalfox",
+            slot: .primary
+        )
+        store.menuBarDisplayMode = .meter(missingMeterID)
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(makeSnapshot())]),
+            preferencesStore: store
+        )
+
+        viewModel.refreshNow()
+        try await waitUntil { viewModel.loadState == .loaded }
+
+        #expect(viewModel.menuBarDisplayMode == .both)
+        #expect(store.menuBarDisplayMode == .both)
+        #expect(viewModel.menuBarDisplayDividerOptions == [.credits])
+    }
+
+    @MainActor
+    @Test
+    func fallsBackWhenStoredMainWindowIsUnavailable() async throws {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        let store = PreferencesStore(userDefaults: defaults)
+        store.menuBarDisplayMode = .secondaryRemaining
+        let baseSnapshot = makeSnapshot()
+        let unavailableSecondary = UsageMeterViewData(
+            id: .secondary,
+            kind: .rateLimit,
+            title: "Secondary window",
+            valueText: "Unavailable",
+            resetText: nil,
+            remainingPercent: nil,
+            level: .neutral,
+            resetDate: nil,
+            isAvailable: false
+        )
+        let snapshot = UsageSnapshot(
+            meters: [
+                baseSnapshot.meter(id: .primary)!,
+                unavailableSecondary,
+                baseSnapshot.meter(id: .credits)!
+            ],
+            lastUpdated: baseSnapshot.lastUpdated,
+            warningMessage: nil
+        )
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(snapshot)]),
+            preferencesStore: store
+        )
+
+        viewModel.refreshNow()
+        try await waitUntil { viewModel.loadState == .loaded }
+
+        #expect(viewModel.menuBarDisplayMode == .both)
+        #expect(store.menuBarDisplayMode == .both)
+    }
+
+    @MainActor
+    @Test
+    func keepsStoredDynamicMeterInPickerWhileInitialRefreshIsPending() {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        let store = PreferencesStore(userDefaults: defaults)
+        let sparkMeterID = UsageMeterID.additional(
+            feature: "codex_bengalfox",
+            slot: .primary
+        )
+        store.menuBarDisplayMode = .meter(sparkMeterID)
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(makeSnapshot())]),
+            preferencesStore: store
+        )
+
+        #expect(viewModel.menuBarDisplayOptions == [
+            .both,
+            .primaryRemaining,
+            .secondaryRemaining,
+            .meter(sparkMeterID),
+            .credits
+        ])
+    }
+
+    @MainActor
+    @Test
     func persistsMenuBarColorMode() async throws {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
@@ -170,6 +354,63 @@ struct UsageViewModelTests {
         #expect(viewModel.remainingLabelColorMode == .colorful)
         #expect(store.meterColorMode == .monochrome)
         #expect(store.remainingLabelColorMode == .colorful)
+    }
+
+    @MainActor
+    @Test
+    func hidesOnlyTheSelectedMeterAndPersistsItsSettings() async throws {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        let store = PreferencesStore(userDefaults: defaults)
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(makeSnapshot())]),
+            preferencesStore: store
+        )
+
+        viewModel.refreshNow()
+        try await waitUntil { viewModel.loadState == .loaded }
+        viewModel.setMeterVisible(false, meterID: .secondary)
+
+        #expect(viewModel.visibleMeters(in: viewModel.snapshot!).map(\.id) == [.primary, .credits])
+        #expect(store.meterPreferences[.secondary]?.isVisible == false)
+        #expect(viewModel.preferences(for: .primary).isVisible)
+    }
+
+    @MainActor
+    @Test
+    func distinguishesUnavailableMetersFromDisabledMetersInEmptyState() {
+        let unavailableMeter = UsageMeterViewData(
+            id: .primary,
+            kind: .rateLimit,
+            title: "Main window",
+            valueText: "Unavailable",
+            resetText: nil,
+            remainingPercent: nil,
+            level: .neutral,
+            resetDate: nil,
+            isAvailable: false
+        )
+        let snapshot = UsageSnapshot(
+            meters: [unavailableMeter],
+            lastUpdated: Date(),
+            warningMessage: nil
+        )
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(snapshot)])
+        )
+
+        #expect(viewModel.visibleMeters(in: snapshot).isEmpty)
+        #expect(
+            viewModel.meterEmptyStateMessage(in: snapshot)
+                == "No usage meters are currently available."
+        )
+
+        viewModel.setMeterVisible(false, meterID: .primary)
+
+        #expect(
+            viewModel.meterEmptyStateMessage(in: snapshot)
+                == "No meters are enabled. You can enable meters in Settings."
+        )
     }
 
     @MainActor
@@ -292,10 +533,10 @@ struct UsageViewModelTests {
             notificationService: notificationService
         )
 
-        viewModel.setResetNotificationsEnabled(true)
+        viewModel.setResetNotificationsEnabled(true, meterID: .primary)
         try await waitUntil { notificationService.authorizationRequestCount == 1 }
 
-        #expect(viewModel.resetNotificationsEnabled)
-        #expect(store.resetNotificationsEnabled)
+        #expect(viewModel.preferences(for: .primary).resetNotificationsEnabled)
+        #expect(store.meterPreferences[.primary]?.resetNotificationsEnabled == true)
     }
 }

@@ -117,11 +117,9 @@ final class MockNotificationService: NotificationScheduling, @unchecked Sendable
         return true
     }
 
-    func updateThreshold(_ threshold: NotificationThreshold?) async {}
     func evaluateNotifications(
         for snapshot: UsageSnapshot,
-        threshold: NotificationThreshold?,
-        resetNotificationsEnabled: Bool
+        settings: [UsageMeterID: MeterPreferences]
     ) async {}
 }
 

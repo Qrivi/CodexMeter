@@ -7,8 +7,6 @@ final class PreferencesStore {
         static let menuBarColorMode: UsageColorMode = .monochrome
         static let meterColorMode: UsageColorMode = .colorful
         static let remainingLabelColorMode: UsageColorMode = .colorfulWhenLow
-        static let notificationThreshold: NotificationThreshold? = nil
-        static let resetNotificationsEnabled = false
         static let pollOnMenuOpen = true
         static let launchAtLoginEnabled = false
     }
@@ -20,8 +18,7 @@ final class PreferencesStore {
         static let menuBarColorMode = "menuBarColorMode"
         static let meterColorMode = "meterColorMode"
         static let remainingLabelColorMode = "remainingLabelColorMode"
-        static let notificationThreshold = "notificationThreshold"
-        static let resetNotificationsEnabled = "resetNotificationsEnabled"
+        static let meterPreferences = "meterPreferences.v2"
         static let pollOnMenuOpen = "pollOnMenuOpen"
         static let launchAtLoginEnabled = "launchAtLoginEnabled"
     }
@@ -93,33 +90,22 @@ final class PreferencesStore {
         }
     }
 
-    var limitNotificationThreshold: NotificationThreshold? {
+    var meterPreferences: [UsageMeterID: MeterPreferences] {
         get {
-            guard let value = userDefaults.object(forKey: Key.notificationThreshold) as? Int else {
-                return Default.notificationThreshold
+            guard let data = userDefaults.data(forKey: Key.meterPreferences),
+                  let stored = try? JSONDecoder().decode([String: MeterPreferences].self, from: data) else {
+                return [:]
             }
 
-            return NotificationThreshold(rawValue: value)
+            return Dictionary(uniqueKeysWithValues: stored.map { (UsageMeterID(rawValue: $0.key), $0.value) })
         }
         set {
-            if let newValue {
-                userDefaults.set(newValue.rawValue, forKey: Key.notificationThreshold)
-            } else {
-                userDefaults.removeObject(forKey: Key.notificationThreshold)
-            }
-        }
-    }
-
-    var resetNotificationsEnabled: Bool {
-        get {
-            guard userDefaults.object(forKey: Key.resetNotificationsEnabled) != nil else {
-                return Default.resetNotificationsEnabled
+            let stored = Dictionary(uniqueKeysWithValues: newValue.map { ($0.key.rawValue, $0.value) })
+            guard let data = try? JSONEncoder().encode(stored) else {
+                return
             }
 
-            return userDefaults.bool(forKey: Key.resetNotificationsEnabled)
-        }
-        set {
-            userDefaults.set(newValue, forKey: Key.resetNotificationsEnabled)
+            userDefaults.set(data, forKey: Key.meterPreferences)
         }
     }
 

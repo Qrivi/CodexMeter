@@ -20,11 +20,9 @@ protocol AppLaunching: Sendable {
 
 protocol NotificationScheduling: Sendable {
     func requestAuthorizationIfNeeded() async -> Bool
-    func updateThreshold(_ threshold: NotificationThreshold?) async
     func evaluateNotifications(
         for snapshot: UsageSnapshot,
-        threshold: NotificationThreshold?,
-        resetNotificationsEnabled: Bool
+        settings: [UsageMeterID: MeterPreferences]
     ) async
 }
 

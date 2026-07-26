@@ -3,7 +3,14 @@ import Foundation
 struct UsageResponse: Decodable, Sendable {
     let planType: String?
     let rateLimit: RateLimitInfo?
+    let additionalRateLimits: [AdditionalRateLimitInfo]?
     let credits: CreditsInfo?
+}
+
+struct AdditionalRateLimitInfo: Decodable, Sendable {
+    let limitName: String?
+    let meteredFeature: String?
+    let rateLimit: RateLimitInfo?
 }
 
 struct RateLimitInfo: Decodable, Sendable {

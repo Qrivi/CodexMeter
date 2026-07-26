@@ -3,6 +3,7 @@ import Foundation
 
 actor NotificationService: NotificationScheduling {
     private struct ThresholdNotificationState: Sendable {
+        var threshold: NotificationThreshold?
         var resetDate: Date?
         var hasNotified = false
     }
@@ -17,9 +18,8 @@ actor NotificationService: NotificationScheduling {
     private let authorizationRequester: @Sendable () async -> Bool
     private let authorizationStatusProvider: @Sendable () async -> UNAuthorizationStatus
     private let requestDeliverer: @Sendable (UNNotificationRequest) async -> Void
-    private var currentThreshold: NotificationThreshold?
-    private var thresholdStateByWindow: [UsageWindowKind: ThresholdNotificationState] = [:]
-    private var resetStateByWindow: [UsageWindowKind: ResetNotificationState] = [:]
+    private var thresholdStateByMeter: [UsageMeterID: ThresholdNotificationState] = [:]
+    private var resetStateByMeter: [UsageMeterID: ResetNotificationState] = [:]
 
     init(center: UNUserNotificationCenter = .current()) {
         self.authorizationRequester = {
@@ -64,18 +64,23 @@ actor NotificationService: NotificationScheduling {
         }
     }
 
-    func updateThreshold(_ threshold: NotificationThreshold?) async {
-        reconcileThreshold(threshold)
-    }
-
     func evaluateNotifications(
         for snapshot: UsageSnapshot,
-        threshold: NotificationThreshold?,
-        resetNotificationsEnabled: Bool
+        settings: [UsageMeterID: MeterPreferences]
     ) async {
-        reconcileThreshold(threshold)
+        let enabledMeters = snapshot.meters.filter { meter in
+            meter.isAvailable
+                && meter.supportsNotifications
+                && (settings[meter.id] ?? MeterPreferences()).isVisible
+        }
+        let enabledIDs = Set(enabledMeters.map(\.id))
+        thresholdStateByMeter = thresholdStateByMeter.filter { enabledIDs.contains($0.key) }
+        resetStateByMeter = resetStateByMeter.filter { enabledIDs.contains($0.key) }
 
-        guard threshold != nil || resetNotificationsEnabled else {
+        guard enabledMeters.contains(where: { meter in
+            let preferences = settings[meter.id] ?? MeterPreferences()
+            return preferences.notificationThreshold != nil || preferences.resetNotificationsEnabled
+        }) else {
             return
         }
 
@@ -84,105 +89,100 @@ actor NotificationService: NotificationScheduling {
             return
         }
 
-        await evaluate(
-            section: snapshot.fiveHourSection,
-            threshold: threshold,
-            resetNotificationsEnabled: resetNotificationsEnabled
-        )
-        await evaluate(
-            section: snapshot.weeklySection,
-            threshold: threshold,
-            resetNotificationsEnabled: resetNotificationsEnabled
-        )
-    }
-
-    private func reconcileThreshold(_ threshold: NotificationThreshold?) {
-        if threshold != currentThreshold {
-            thresholdStateByWindow.removeAll()
+        for meter in enabledMeters {
+            let preferences = settings[meter.id] ?? MeterPreferences()
+            await evaluate(
+                meter: meter,
+                threshold: preferences.notificationThreshold,
+                resetNotificationsEnabled: preferences.resetNotificationsEnabled
+            )
         }
-
-        currentThreshold = threshold
     }
 
     private func evaluate(
-        section: UsageSectionViewData,
+        meter: UsageMeterViewData,
         threshold: NotificationThreshold?,
         resetNotificationsEnabled: Bool
     ) async {
-        guard let remainingPercent = section.remainingPercent else {
+        guard let remainingPercent = meter.remainingPercent else {
             return
         }
 
         if let threshold {
             await evaluateThresholdNotification(
-                section: section,
+                meter: meter,
                 remainingPercent: remainingPercent,
                 threshold: threshold
             )
         }
 
         if resetNotificationsEnabled {
-            await evaluateResetNotification(section: section, remainingPercent: remainingPercent)
+            await evaluateResetNotification(meter: meter, remainingPercent: remainingPercent)
         }
     }
 
     private func evaluateThresholdNotification(
-        section: UsageSectionViewData,
+        meter: UsageMeterViewData,
         remainingPercent: Int,
         threshold: NotificationThreshold
     ) async {
-        var notificationState = thresholdStateByWindow[section.windowKind] ?? ThresholdNotificationState()
+        var notificationState = thresholdStateByMeter[meter.id]
+            ?? ThresholdNotificationState(threshold: threshold)
 
-        if notificationState.resetDate != section.resetDate {
-            notificationState = ThresholdNotificationState(resetDate: section.resetDate, hasNotified: false)
+        if notificationState.threshold != threshold || notificationState.resetDate != meter.resetDate {
+            notificationState = ThresholdNotificationState(
+                threshold: threshold,
+                resetDate: meter.resetDate,
+                hasNotified: false
+            )
         }
 
         if remainingPercent > threshold.rawValue {
             notificationState.hasNotified = false
-            notificationState.resetDate = section.resetDate
-            thresholdStateByWindow[section.windowKind] = notificationState
+            notificationState.resetDate = meter.resetDate
+            thresholdStateByMeter[meter.id] = notificationState
             return
         }
 
         guard notificationState.hasNotified == false else {
-            thresholdStateByWindow[section.windowKind] = notificationState
+            thresholdStateByMeter[meter.id] = notificationState
             return
         }
 
         let body = bodyText(
-            prefix: "\(section.title) reached \(threshold.rawValue)% remaining.",
-            resetText: section.resetText
+            prefix: "\(meter.title) reached \(threshold.rawValue)% remaining.",
+            resetText: meter.resetText
         )
 
         let content = UNMutableNotificationContent()
-        content.title = section.windowKind.limitNotificationTitle
+        content.title = "\(meter.title) is low"
         content.body = body
         content.sound = .default
 
         let request = UNNotificationRequest(
-            identifier: "codexmeter-\(section.windowKind.rawValue)-threshold-\(threshold.rawValue)",
+            identifier: "codexmeter-\(identifierComponent(for: meter.id))-threshold-\(threshold.rawValue)",
             content: content,
             trigger: nil
         )
 
         await requestDeliverer(request)
         notificationState.hasNotified = true
-        notificationState.resetDate = section.resetDate
-        thresholdStateByWindow[section.windowKind] = notificationState
+        notificationState.resetDate = meter.resetDate
+        thresholdStateByMeter[meter.id] = notificationState
     }
 
-    private func evaluateResetNotification(section: UsageSectionViewData, remainingPercent: Int) async {
-        var notificationState = resetStateByWindow[section.windowKind] ?? ResetNotificationState()
+    private func evaluateResetNotification(meter: UsageMeterViewData, remainingPercent: Int) async {
+        var notificationState = resetStateByMeter[meter.id] ?? ResetNotificationState()
 
         guard remainingPercent >= Self.resetRemainingPercent else {
             notificationState.hasSeenBelowResetLevel = true
             notificationState.hasNotifiedAtResetLevel = false
-            resetStateByWindow[section.windowKind] = notificationState
+            resetStateByMeter[meter.id] = notificationState
             return
         }
 
         defer {
-            resetStateByWindow[section.windowKind] = notificationState
+            resetStateByMeter[meter.id] = notificationState
         }
 
         guard notificationState.hasSeenBelowResetLevel,
@@ -191,17 +191,17 @@ actor NotificationService: NotificationScheduling {
         }
 
         let body = bodyText(
-            prefix: "\(section.title) reset. \(remainingPercent)% remaining.",
-            resetText: section.resetText
+            prefix: "\(meter.title) reset. \(remainingPercent)% remaining.",
+            resetText: meter.resetText
         )
 
         let content = UNMutableNotificationContent()
-        content.title = section.windowKind.resetNotificationTitle
+        content.title = "\(meter.title) reset"
         content.body = body
         content.sound = .default
 
         let request = UNNotificationRequest(
-            identifier: "codexmeter-\(section.windowKind.rawValue)-reset",
+            identifier: "codexmeter-\(identifierComponent(for: meter.id))-reset",
             content: content,
             trigger: nil
         )
@@ -216,5 +216,26 @@ actor NotificationService: NotificationScheduling {
         }
 
         return prefix
+    }
+
+    private func identifierComponent(for meterID: UsageMeterID) -> String {
+        if meterID.rawValue == "codex.primary" {
+            return "codex-primary"
+        }
+
+        if meterID.rawValue == "codex.secondary" {
+            return "codex-secondary"
+        }
+
+        if meterID.rawValue == "credits" {
+            return "credits"
+        }
+
+        let encodedID = Data(meterID.rawValue.utf8)
+            .base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return "dynamic-\(encodedID)"
     }
 }

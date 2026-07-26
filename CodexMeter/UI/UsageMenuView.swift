@@ -10,7 +10,7 @@ struct UsageMenuView: View {
             content
         }
         .padding(MacOSRelease.isSequoia ? 4 : 6)
-        .frame(width: 280)
+        .frame(width: 290)
         .onAppear {
             viewModel.menuOpened()
         }
@@ -24,6 +24,9 @@ struct UsageMenuView: View {
             } else if let message = viewModel.currentFailureMessage {
                 Text(message)
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
             } else {
                 Text("Loading…")
@@ -51,22 +54,21 @@ struct UsageMenuView: View {
 
     private func usageSections(snapshot: UsageSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 20) {
-            UsageSectionView(
-                section: snapshot.fiveHourSection,
-                meterColorMode: viewModel.meterColorMode,
-                remainingLabelColorMode: viewModel.remainingLabelColorMode
-            )
-            UsageSectionView(
-                section: snapshot.weeklySection,
-                meterColorMode: viewModel.meterColorMode,
-                remainingLabelColorMode: viewModel.remainingLabelColorMode
-            )
-            HStack(alignment: .firstTextBaseline) {
-                Text("Credits remaining")
-                    .font(.headline)
-                Spacer()
-                Text(snapshot.creditsText)
-                    .font(.body.monospacedDigit())
+            let visibleMeters = viewModel.visibleMeters(in: snapshot)
+
+            if visibleMeters.isEmpty {
+                Text(viewModel.meterEmptyStateMessage(in: snapshot))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach(visibleMeters) { meter in
+                    UsageSectionView(
+                        meter: meter,
+                        meterColorMode: viewModel.meterColorMode,
+                        remainingLabelColorMode: viewModel.remainingLabelColorMode
+                    )
+                }
             }
         }
         .padding(.horizontal, MacOSRelease.isSequoia ? 10 : 12)
@@ -98,34 +100,34 @@ struct UsageMenuView: View {
 }
 
 private struct UsageSectionView: View {
-    let section: UsageSectionViewData
+    let meter: UsageMeterViewData
     let meterColorMode: UsageColorMode
     let remainingLabelColorMode: UsageColorMode
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                Text(section.title)
+                Text(meter.title)
                     .font(.headline)
 
                 Spacer()
 
-                Text(section.remainingText)
+                Text(meter.valueText)
                     .font(.body.monospacedDigit())
                     .foregroundStyle(remainingLabelColorMode.color(
-                        level: section.level,
-                        remainingPercent: section.remainingPercent
+                        level: meter.level,
+                        remainingPercent: meter.remainingPercent
                     ))
             }
 
-            if let remainingPercent = section.remainingPercent {
+            if let remainingPercent = meter.remainingPercent {
                 UsageMeterView(
                     remainingPercent: remainingPercent,
-                    color: meterColorMode.color(level: section.level, remainingPercent: remainingPercent)
+                    color: meterColorMode.color(level: meter.level, remainingPercent: remainingPercent)
                 )
             }
 
-            if let resetText = section.resetText {
+            if let resetText = meter.resetText {
                 Text(resetText)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -173,7 +175,7 @@ struct UsageMenuView_Previews: PreviewProvider {
                 .previewDisplayName("Usage Menu Error")
 
             UsageSectionView(
-                section: PreviewSupport.snapshot.weeklySection,
+                meter: PreviewSupport.snapshot.meter(id: .secondary)!,
                 meterColorMode: .colorful,
                 remainingLabelColorMode: .colorfulWhenLow
             )

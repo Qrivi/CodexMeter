@@ -28,37 +28,67 @@ enum PollingInterval: Int, CaseIterable, Identifiable, Sendable {
     }
 }
 
-enum MenuBarDisplayMode: String, CaseIterable, Identifiable, Sendable {
-    case both = "both"
-    case fiveHourRemaining = "five_hour_remaining"
-    case weekRemaining = "week_remaining"
-    case credits = "credits"
+enum MenuBarDisplayMode: RawRepresentable, Hashable, Identifiable, Sendable {
+    case both
+    case primaryRemaining
+    case secondaryRemaining
+    case credits
+    case meter(UsageMeterID)
+
+    private static let dynamicMeterPrefix = "meter."
+
+    init?(rawValue: String) {
+        switch rawValue {
+        case "both":
+            self = .both
+        case "primary_remaining":
+            self = .primaryRemaining
+        case "secondary_remaining":
+            self = .secondaryRemaining
+        case "credits":
+            self = .credits
+        default:
+            guard rawValue.hasPrefix(Self.dynamicMeterPrefix) else {
+                return nil
+            }
+
+            let meterID = String(rawValue.dropFirst(Self.dynamicMeterPrefix.count))
+            guard meterID.isEmpty == false else {
+                return nil
+            }
+            self = .meter(UsageMeterID(rawValue: meterID))
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .both:
+            "both"
+        case .primaryRemaining:
+            "primary_remaining"
+        case .secondaryRemaining:
+            "secondary_remaining"
+        case .credits:
+            "credits"
+        case let .meter(meterID):
+            "\(Self.dynamicMeterPrefix)\(meterID.rawValue)"
+        }
+    }
 
     var id: String { rawValue }
 
     var menuTitle: String {
         switch self {
-        case .fiveHourRemaining:
-            "5 hour usage limit"
-        case .weekRemaining:
-            "Weekly usage limit"
+        case .primaryRemaining:
+            "Main window"
+        case .secondaryRemaining:
+            "Secondary window"
         case .both:
-            "Both usage limits"
+            "Main usage limits"
         case .credits:
             "Credits remaining"
-        }
-    }
-
-    var menuBarTitle: String {
-        switch self {
-        case .fiveHourRemaining:
-            "5 hour"
-        case .weekRemaining:
-            "Weekly"
-        case .both:
-            "Limits"
-        case .credits:
-            "Credits"
+        case .meter:
+            "Usage meter"
         }
     }
 }
@@ -94,3 +124,21 @@ enum NotificationThreshold: Int, CaseIterable, Identifiable, Sendable {
         "Notify at \(rawValue)%"
     }
 }
+
+struct MeterPreferences: Codable, Equatable, Sendable {
+    var isVisible = true
+    var notificationThreshold: NotificationThreshold?
+    var resetNotificationsEnabled = false
+
+    nonisolated init(
+        isVisible: Bool = true,
+        notificationThreshold: NotificationThreshold? = nil,
+        resetNotificationsEnabled: Bool = false
+    ) {
+        self.isVisible = isVisible
+        self.notificationThreshold = notificationThreshold
+        self.resetNotificationsEnabled = resetNotificationsEnabled
+    }
+}
+
+extension NotificationThreshold: Codable {}
