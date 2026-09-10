@@ -1,6 +1,6 @@
 import Foundation
 
-struct AuthTokenProvider: TokenProviding {
+struct AuthTokenProvider: TokenProviding, @unchecked Sendable {
     private let fileManager: FileManager
     private let authFileURL: URL
 

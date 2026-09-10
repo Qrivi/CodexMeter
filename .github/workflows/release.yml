@@ -82,6 +82,7 @@ jobs:
 
           app_path="${RUNNER_TEMP}/DerivedData-${{ matrix.arch }}/Build/Products/Release/CodexMeter.app"
           executable_path="${app_path}/Contents/MacOS/CodexMeter"
+          cli_path="${app_path}/Contents/Helpers/codexmeter"
           icon_path="${app_path}/Contents/Resources/AppIcon.icns"
           info_plist="${app_path}/Contents/Info.plist"
 
@@ -100,9 +101,20 @@ jobs:
             exit 1
           fi
 
+          if [[ ! -x "${cli_path}" ]]; then
+            echo "Built app is missing executable CLI helper ${cli_path}." >&2
+            exit 1
+          fi
+
           if ! lipo -archs "${executable_path}" | tr ' ' '\n' | grep -Fxq "${{ matrix.arch }}"; then
             echo "Built executable does not contain the ${{ matrix.arch }} architecture." >&2
             lipo -archs "${executable_path}" >&2
+            exit 1
+          fi
+
+          if ! lipo -archs "${cli_path}" | tr ' ' '\n' | grep -Fxq "${{ matrix.arch }}"; then
+            echo "CLI helper does not contain the ${{ matrix.arch }} architecture." >&2
+            lipo -archs "${cli_path}" >&2
             exit 1
           fi
 
@@ -117,6 +129,14 @@ jobs:
             echo "Expected a macOS 26 SDK build, got ${sdk_name}." >&2
             exit 1
           fi
+
+          cli_version="$("${cli_path}" --version)"
+          if [[ "${cli_version}" != "codexmeter ${{ steps.version.outputs.version }}" ]]; then
+            echo "Expected CLI version codexmeter ${{ steps.version.outputs.version }}, got ${cli_version}." >&2
+            exit 1
+          fi
+
+          "${cli_path}" --help | grep -Fq "Usage: codexmeter"
 
       - name: Create ${{ matrix.display_name }} DMG
         id: dmg

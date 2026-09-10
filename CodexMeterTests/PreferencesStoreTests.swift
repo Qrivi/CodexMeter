@@ -16,6 +16,7 @@ struct PreferencesStoreTests {
         #expect(store.meterColorMode == .colorful)
         #expect(store.remainingLabelColorMode == .colorfulWhenLow)
         #expect(store.meterPreferences.isEmpty)
+        #expect(store.cliInstallPath.isEmpty == false)
         #expect(store.pollOnMenuOpen)
         #expect(store.launchAtLoginEnabled == false)
     }
@@ -42,6 +43,7 @@ struct PreferencesStoreTests {
                 resetNotificationsEnabled: true
             )
         ]
+        store.cliInstallPath = "~/.local/bin"
         store.pollOnMenuOpen = false
         store.launchAtLoginEnabled = true
 
@@ -57,6 +59,7 @@ struct PreferencesStoreTests {
             notificationThreshold: .ten,
             resetNotificationsEnabled: true
         ))
+        #expect(store.cliInstallPath == "~/.local/bin")
         #expect(store.pollOnMenuOpen == false)
         #expect(store.launchAtLoginEnabled)
     }

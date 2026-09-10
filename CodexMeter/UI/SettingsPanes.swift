@@ -256,6 +256,96 @@ struct MeterSettingsPane: View {
     }
 }
 
+struct CLISettingsPane: View {
+    @StateObject private var model = CLISettingsModel()
+
+    var body: some View {
+        SettingsPaneContainer {
+            Section("Command Line") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Install the bundled codexmeter command by creating a symbolic link in a shell bin directory.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    SettingsPickerRow(
+                        title: "Install location",
+                        description: "User-writable locations can be installed without administrator privileges.",
+                        selection: installLocationBinding,
+                        options: CLIInstallLocation.standardLocations,
+                        label: \.path
+                    )
+
+                    HStack(spacing: 10) {
+                        Button(installButtonTitle) {
+                            model.install()
+                        }
+                        .disabled(model.installStatus.canInstall == false)
+
+                        Button("Remove") {
+                            model.remove()
+                        }
+                        .disabled(model.installStatus.isInstalled == false)
+                    }
+
+                    Text(model.installStatus.message)
+                        .font(.footnote)
+                        .foregroundStyle(statusColor)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if let errorMessage = model.errorMessage {
+                        Text(errorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(UsageStatusPalette.critical)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+
+            Section("Manual Installation") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("If CodexMeter cannot write to the selected directory, run this command in Terminal:")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(model.manualInstallCommand)
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .onAppear {
+            model.refresh()
+        }
+    }
+
+    private var installLocationBinding: Binding<CLIInstallLocation> {
+        Binding(
+            get: { model.installLocation },
+            set: { model.selectInstallLocation($0) }
+        )
+    }
+
+    private var installButtonTitle: String {
+        model.installStatus.state == .staleCodexMeterSymlink
+            ? "Update Symlink"
+            : "Install"
+    }
+
+    private var statusColor: Color {
+        switch model.installStatus.state {
+        case .installed, .notInstalled, .missingDirectory:
+            .secondary
+        case .staleCodexMeterSymlink:
+            UsageStatusPalette.warning
+        case .permissionDenied, .existingFile, .foreignSymlink, .missingBundledCLI:
+            UsageStatusPalette.critical
+        }
+    }
+}
+
 struct AboutSettingsPane: View {
     @StateObject private var model = AboutPaneModel()
 

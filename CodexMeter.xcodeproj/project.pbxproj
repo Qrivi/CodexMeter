@@ -6,6 +6,23 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		C0DE00000000000000000210 /* CodexMeter/Services/ServiceProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000110 /* CodexMeter/Services/ServiceProtocols.swift */; };
+		C0DE00000000000000000211 /* CodexMeter/Services/ServiceErrors.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000111 /* CodexMeter/Services/ServiceErrors.swift */; };
+		C0DE00000000000000000212 /* CodexMeter/Services/UsageResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000112 /* CodexMeter/Services/UsageResponse.swift */; };
+		C0DE00000000000000000213 /* CodexMeter/Services/UsageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000113 /* CodexMeter/Services/UsageService.swift */; };
+		C0DE00000000000000000214 /* CodexMeter/Services/AuthTokenProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000114 /* CodexMeter/Services/AuthTokenProvider.swift */; };
+		C0DE00000000000000000216 /* CodexMeter/Formatting/UsageFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000116 /* CodexMeter/Formatting/UsageFormatting.swift */; };
+		C0DE00000000000000000217 /* CodexMeter/Models/PreferencesOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000117 /* CodexMeter/Models/PreferencesOptions.swift */; };
+		C0DE00000000000000000218 /* CodexMeter/Models/UsageDisplayTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000118 /* CodexMeter/Models/UsageDisplayTypes.swift */; };
+		C0DE00000000000000000219 /* CodexMeter/Models/UsageSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000119 /* CodexMeter/Models/UsageSnapshot.swift */; };
+		C0DE0000000000000000021A /* CodexMeter/CLI/CodexMeterCLIOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000011A /* CodexMeter/CLI/CodexMeterCLIOptions.swift */; };
+		C0DE0000000000000000021B /* CodexMeter/CLI/CodexMeterCLIRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000011B /* CodexMeter/CLI/CodexMeterCLIRenderer.swift */; };
+		C0DE0000000000000000021C /* CodexMeter/CLI/CodexMeterCLIJSONRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000011C /* CodexMeter/CLI/CodexMeterCLIJSONRenderer.swift */; };
+		C0DE0000000000000000021D /* CodexMeter/CLI/CodexMeterCLICommandRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000011D /* CodexMeter/CLI/CodexMeterCLICommandRunner.swift */; };
+		C0DE0000000000000000021E /* codexmeter in Copy CLI */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000001 /* codexmeter */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		18EDBE3A2FA9E0D0003487CD /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -21,12 +38,47 @@
 			remoteGlobalIDString = 18EDBE2B2FA9E0CF003487CD;
 			remoteInfo = CodexMeter;
 		};
+		C0DE00000000000000000004 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 18EDBE242FA9E0CF003487CD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C0DE00000000000000000003;
+			remoteInfo = CodexMeterCLI;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		C0DE00000000000000000006 /* Copy CLI */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Helpers;
+			dstSubfolderSpec = 1;
+			files = (
+				C0DE0000000000000000021E /* codexmeter in Copy CLI */,
+			);
+			name = "Copy CLI";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		18EDBE2C2FA9E0CF003487CD /* CodexMeter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodexMeter.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		18EDBE392FA9E0D0003487CD /* CodexMeterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CodexMeterTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		18EDBE432FA9E0D0003487CD /* CodexMeterUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CodexMeterUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C0DE00000000000000000001 /* codexmeter */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = codexmeter; sourceTree = BUILT_PRODUCTS_DIR; };
+		C0DE00000000000000000110 /* CodexMeter/Services/ServiceProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexMeter/Services/ServiceProtocols.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000111 /* CodexMeter/Services/ServiceErrors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexMeter/Services/ServiceErrors.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000112 /* CodexMeter/Services/UsageResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexMeter/Services/UsageResponse.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000113 /* CodexMeter/Services/UsageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexMeter/Services/UsageService.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000114 /* CodexMeter/Services/AuthTokenProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexMeter/Services/AuthTokenProvider.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000116 /* CodexMeter/Formatting/UsageFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexMeter/Formatting/UsageFormatting.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000117 /* CodexMeter/Models/PreferencesOptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexMeter/Models/PreferencesOptions.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000118 /* CodexMeter/Models/UsageDisplayTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexMeter/Models/UsageDisplayTypes.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000119 /* CodexMeter/Models/UsageSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexMeter/Models/UsageSnapshot.swift; sourceTree = "<group>"; };
+		C0DE0000000000000000011A /* CodexMeter/CLI/CodexMeterCLIOptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexMeter/CLI/CodexMeterCLIOptions.swift; sourceTree = "<group>"; };
+		C0DE0000000000000000011B /* CodexMeter/CLI/CodexMeterCLIRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexMeter/CLI/CodexMeterCLIRenderer.swift; sourceTree = "<group>"; };
+		C0DE0000000000000000011C /* CodexMeter/CLI/CodexMeterCLIJSONRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexMeter/CLI/CodexMeterCLIJSONRenderer.swift; sourceTree = "<group>"; };
+		C0DE0000000000000000011D /* CodexMeter/CLI/CodexMeterCLICommandRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexMeter/CLI/CodexMeterCLICommandRunner.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -43,6 +95,11 @@
 		18EDBE462FA9E0D0003487CD /* CodexMeterUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = CodexMeterUITests;
+			sourceTree = "<group>";
+		};
+		C0DE00000000000000000002 /* CodexMeterCommand */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = CodexMeterCommand;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -69,16 +126,45 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C0DE00000000000000000009 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		189A71343015C78900DF32E2 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				C0DE00000000000000000110 /* CodexMeter/Services/ServiceProtocols.swift */,
+				C0DE00000000000000000111 /* CodexMeter/Services/ServiceErrors.swift */,
+				C0DE00000000000000000112 /* CodexMeter/Services/UsageResponse.swift */,
+				C0DE00000000000000000113 /* CodexMeter/Services/UsageService.swift */,
+				C0DE00000000000000000114 /* CodexMeter/Services/AuthTokenProvider.swift */,
+				C0DE00000000000000000116 /* CodexMeter/Formatting/UsageFormatting.swift */,
+				C0DE00000000000000000117 /* CodexMeter/Models/PreferencesOptions.swift */,
+				C0DE00000000000000000118 /* CodexMeter/Models/UsageDisplayTypes.swift */,
+				C0DE00000000000000000119 /* CodexMeter/Models/UsageSnapshot.swift */,
+				C0DE0000000000000000011A /* CodexMeter/CLI/CodexMeterCLIOptions.swift */,
+				C0DE0000000000000000011B /* CodexMeter/CLI/CodexMeterCLIRenderer.swift */,
+				C0DE0000000000000000011C /* CodexMeter/CLI/CodexMeterCLIJSONRenderer.swift */,
+				C0DE0000000000000000011D /* CodexMeter/CLI/CodexMeterCLICommandRunner.swift */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
 		18EDBE232FA9E0CF003487CD = {
 			isa = PBXGroup;
 			children = (
 				18EDBE2E2FA9E0CF003487CD /* CodexMeter */,
+				C0DE00000000000000000002 /* CodexMeterCommand */,
 				18EDBE3C2FA9E0D0003487CD /* CodexMeterTests */,
 				18EDBE462FA9E0D0003487CD /* CodexMeterUITests */,
 				18EDBE2D2FA9E0CF003487CD /* Products */,
+				189A71343015C78900DF32E2 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -86,6 +172,7 @@
 			isa = PBXGroup;
 			children = (
 				18EDBE2C2FA9E0CF003487CD /* CodexMeter.app */,
+				C0DE00000000000000000001 /* codexmeter */,
 				18EDBE392FA9E0D0003487CD /* CodexMeterTests.xctest */,
 				18EDBE432FA9E0D0003487CD /* CodexMeterUITests.xctest */,
 			);
@@ -102,10 +189,12 @@
 				18EDBE282FA9E0CF003487CD /* Sources */,
 				18EDBE292FA9E0CF003487CD /* Frameworks */,
 				18EDBE2A2FA9E0CF003487CD /* Resources */,
+				C0DE00000000000000000006 /* Copy CLI */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				C0DE00000000000000000005 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				18EDBE2E2FA9E0CF003487CD /* CodexMeter */,
@@ -163,6 +252,27 @@
 			productReference = 18EDBE432FA9E0D0003487CD /* CodexMeterUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		C0DE00000000000000000003 /* CodexMeterCLI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C0DE00000000000000000007 /* Build configuration list for PBXNativeTarget "CodexMeterCLI" */;
+			buildPhases = (
+				C0DE00000000000000000008 /* Sources */,
+				C0DE00000000000000000009 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				C0DE00000000000000000002 /* CodexMeterCommand */,
+			);
+			name = CodexMeterCLI;
+			packageProductDependencies = (
+			);
+			productName = codexmeter;
+			productReference = C0DE00000000000000000001 /* codexmeter */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -184,6 +294,9 @@
 						CreatedOnToolsVersion = 26.3;
 						TestTargetID = 18EDBE2B2FA9E0CF003487CD;
 					};
+					C0DE00000000000000000003 = {
+						CreatedOnToolsVersion = 26.3;
+					};
 				};
 			};
 			buildConfigurationList = 18EDBE272FA9E0CF003487CD /* Build configuration list for PBXProject "CodexMeter" */;
@@ -201,6 +314,7 @@
 			projectRoot = "";
 			targets = (
 				18EDBE2B2FA9E0CF003487CD /* CodexMeter */,
+				C0DE00000000000000000003 /* CodexMeterCLI */,
 				18EDBE382FA9E0D0003487CD /* CodexMeterTests */,
 				18EDBE422FA9E0D0003487CD /* CodexMeterUITests */,
 			);
@@ -253,6 +367,26 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C0DE00000000000000000008 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C0DE00000000000000000210 /* CodexMeter/Services/ServiceProtocols.swift in Sources */,
+				C0DE00000000000000000211 /* CodexMeter/Services/ServiceErrors.swift in Sources */,
+				C0DE00000000000000000212 /* CodexMeter/Services/UsageResponse.swift in Sources */,
+				C0DE00000000000000000213 /* CodexMeter/Services/UsageService.swift in Sources */,
+				C0DE00000000000000000214 /* CodexMeter/Services/AuthTokenProvider.swift in Sources */,
+				C0DE00000000000000000216 /* CodexMeter/Formatting/UsageFormatting.swift in Sources */,
+				C0DE00000000000000000217 /* CodexMeter/Models/PreferencesOptions.swift in Sources */,
+				C0DE00000000000000000218 /* CodexMeter/Models/UsageDisplayTypes.swift in Sources */,
+				C0DE00000000000000000219 /* CodexMeter/Models/UsageSnapshot.swift in Sources */,
+				C0DE0000000000000000021A /* CodexMeter/CLI/CodexMeterCLIOptions.swift in Sources */,
+				C0DE0000000000000000021B /* CodexMeter/CLI/CodexMeterCLIRenderer.swift in Sources */,
+				C0DE0000000000000000021C /* CodexMeter/CLI/CodexMeterCLIJSONRenderer.swift in Sources */,
+				C0DE0000000000000000021D /* CodexMeter/CLI/CodexMeterCLICommandRunner.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -265,6 +399,11 @@
 			isa = PBXTargetDependency;
 			target = 18EDBE2B2FA9E0CF003487CD /* CodexMeter */;
 			targetProxy = 18EDBE442FA9E0D0003487CD /* PBXContainerItemProxy */;
+		};
+		C0DE00000000000000000005 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C0DE00000000000000000003 /* CodexMeterCLI */;
+			targetProxy = C0DE00000000000000000004 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -302,6 +441,8 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODEXMETER_BUILD_NUMBER = 3;
+				CODEXMETER_MARKETING_VERSION = 1.1.0;
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
@@ -368,6 +509,8 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODEXMETER_BUILD_NUMBER = 3;
+				CODEXMETER_MARKETING_VERSION = 1.1.0;
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
@@ -401,8 +544,9 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = "$(CODEXMETER_BUILD_NUMBER)";
 				DEAD_CODE_STRIPPING = YES;
+				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 43RWLBBRCP;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -416,8 +560,9 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = "$(CODEXMETER_MARKETING_VERSION)";
 				PRODUCT_BUNDLE_IDENTIFIER = dev.qrivi.CodexMeter;
+				PRODUCT_MODULE_NAME = CodexMeter;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -437,8 +582,9 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = "$(CODEXMETER_BUILD_NUMBER)";
 				DEAD_CODE_STRIPPING = YES;
+				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 43RWLBBRCP;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -452,8 +598,9 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = "$(CODEXMETER_MARKETING_VERSION)";
 				PRODUCT_BUNDLE_IDENTIFIER = dev.qrivi.CodexMeter;
+				PRODUCT_MODULE_NAME = CodexMeter;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -549,6 +696,57 @@
 			};
 			name = Release;
 		};
+		C0DE0000000000000000000A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(CODEXMETER_BUILD_NUMBER)";
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 43RWLBBRCP;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = codexmeter;
+				MACOSX_DEPLOYMENT_TARGET = 15.7;
+				MARKETING_VERSION = "$(CODEXMETER_MARKETING_VERSION)";
+				PRODUCT_BUNDLE_IDENTIFIER = dev.qrivi.CodexMeter.codexmeter;
+				PRODUCT_MODULE_NAME = CodexMeterCommand;
+				PRODUCT_NAME = codexmeter;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		C0DE0000000000000000000B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(CODEXMETER_BUILD_NUMBER)";
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 43RWLBBRCP;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = codexmeter;
+				MACOSX_DEPLOYMENT_TARGET = 15.7;
+				MARKETING_VERSION = "$(CODEXMETER_MARKETING_VERSION)";
+				PRODUCT_BUNDLE_IDENTIFIER = dev.qrivi.CodexMeter.codexmeter;
+				PRODUCT_MODULE_NAME = CodexMeterCommand;
+				PRODUCT_NAME = codexmeter;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -584,6 +782,15 @@
 			buildConfigurations = (
 				18EDBE542FA9E0D0003487CD /* Debug */,
 				18EDBE552FA9E0D0003487CD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C0DE00000000000000000007 /* Build configuration list for PBXNativeTarget "CodexMeterCLI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C0DE0000000000000000000A /* Debug */,
+				C0DE0000000000000000000B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
