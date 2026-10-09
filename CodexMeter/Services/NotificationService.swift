@@ -71,6 +71,38 @@ actor NotificationService: NotificationScheduling {
         }
     }
 
+    func updateAmountNotificationPreferences(
+        for meter: UsageMeterViewData,
+        preferences: MeterPreferences
+    ) {
+        guard meter.isAvailable, preferences.isVisible,
+              amountNotificationsEnabled(for: meter, preferences: preferences),
+              let amount = meter.remainingAmount, amount.isFinite else {
+            amountStateByMeter[meter.id] = nil
+            return
+        }
+
+        var state = amountStateByMeter[meter.id]
+            ?? AmountNotificationState(amount: amount, preferences: preferences)
+        if state.preferences.creditsNotificationThreshold != preferences.creditsNotificationThreshold {
+            state.hasNotifiedLow = false
+        }
+        state.amount = amount
+        state.preferences = preferences
+        amountStateByMeter[meter.id] = state
+    }
+
+    private func amountNotificationsEnabled(for meter: UsageMeterViewData, preferences: MeterPreferences) -> Bool {
+        switch meter.kind {
+        case .rateLimit:
+            false
+        case .credits:
+            preferences.creditsNotificationThreshold != nil || preferences.creditsAddedNotificationsEnabled
+        case .usageLimitResets:
+            preferences.resetsUsedNotificationsEnabled || preferences.resetsAddedNotificationsEnabled
+        }
+    }
+
     func evaluateNotifications(
         for snapshot: UsageSnapshot,
         settings: [UsageMeterID: MeterPreferences]
@@ -85,10 +117,7 @@ actor NotificationService: NotificationScheduling {
         resetStateByMeter = resetStateByMeter.filter { enabledIDs.contains($0.key) }
         let amountEnabledIDs = Set(enabledMeters.filter { meter in
             let preferences = settings[meter.id] ?? MeterPreferences()
-            return meter.kind == .credits
-                ? preferences.creditsNotificationThreshold != nil || preferences.creditsAddedNotificationsEnabled
-                : meter.kind == .usageLimitResets
-                    && (preferences.resetsUsedNotificationsEnabled || preferences.resetsAddedNotificationsEnabled)
+            return amountNotificationsEnabled(for: meter, preferences: preferences)
         }.map(\.id))
         amountStateByMeter = amountStateByMeter.filter { amountEnabledIDs.contains($0.key) }
 

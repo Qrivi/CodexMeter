@@ -6,6 +6,41 @@ import UserNotifications
 @MainActor
 struct NotificationServiceTests {
     @Test
+    func balancePreferenceUpdatesDoNotSendNotificationsOrRepeatLowCreditAlerts() async throws {
+        let tracker = NotificationTracker()
+        let service = makeNotificationService(tracker: tracker)
+        let snapshot = balanceSnapshot(credits: 9)
+        var preferences = MeterPreferences(creditsNotificationThreshold: .ten)
+        await service.evaluateNotifications(for: snapshot, settings: [.credits: preferences])
+
+        preferences.creditsAddedNotificationsEnabled = true
+        await service.updateAmountNotificationPreferences(for: try #require(snapshot.creditsMeter), preferences: preferences)
+        await service.evaluateNotifications(for: snapshot, settings: [.credits: preferences])
+        #expect(await tracker.bodies == ["9 credits remaining."])
+
+        await service.evaluateNotifications(for: balanceSnapshot(credits: 20), settings: [.credits: preferences])
+        #expect(await tracker.bodies == ["9 credits remaining.", "20 credits remaining."])
+    }
+
+    @Test
+    func disablingAndReenablingBalanceNotificationsReseedsWithoutAPoll() async throws {
+        let tracker = NotificationTracker()
+        let service = makeNotificationService(tracker: tracker)
+        let enabled = MeterPreferences(creditsNotificationThreshold: .ten, creditsAddedNotificationsEnabled: true)
+        await service.evaluateNotifications(for: balanceSnapshot(credits: 9), settings: [.credits: enabled])
+        await service.updateAmountNotificationPreferences(
+            for: try #require(balanceSnapshot(credits: 9).creditsMeter), preferences: MeterPreferences()
+        )
+        await service.updateAmountNotificationPreferences(
+            for: try #require(balanceSnapshot(credits: 8).creditsMeter), preferences: enabled
+        )
+        #expect(await tracker.bodies == ["9 credits remaining."])
+
+        await service.evaluateNotifications(for: balanceSnapshot(credits: 8), settings: [.credits: enabled])
+        #expect(await tracker.bodies == ["9 credits remaining.", "8 credits remaining."])
+    }
+
+    @Test
     func creditThresholdUsesUnroundedBalanceAndRearmsAfterTopUp() async {
         let tracker = NotificationTracker()
         let service = makeNotificationService(tracker: tracker)

@@ -4,6 +4,45 @@ import Testing
 
 @MainActor
 struct UsageViewModelTests {
+    @Test(arguments: [
+        (UsageMeterID.credits, true),
+        (.usageLimitResets, true),
+        (.usageLimitResets, false)
+    ])
+    func enablingBalanceNotificationsReportsTheFirstChange(meterID: UsageMeterID, increases: Bool) async throws {
+        let tracker = NotificationTracker()
+        let notifications = MockNotificationService(underlying: makeNotificationService(tracker: tracker))
+        let initial = UsageFormatting.snapshot(from: UsageResponse(
+            planType: nil, rateLimit: nil, additionalRateLimits: nil,
+            credits: CreditsInfo(unlimited: false, balance: .int(10), hasCredits: true),
+            rateLimitResetCredits: RateLimitResetCreditsInfo(availableCount: 3)
+        ))
+        let updated = UsageFormatting.snapshot(from: UsageResponse(
+            planType: nil, rateLimit: nil, additionalRateLimits: nil,
+            credits: CreditsInfo(unlimited: false, balance: .int(20), hasCredits: true),
+            rateLimitResetCredits: RateLimitResetCreditsInfo(availableCount: increases ? 4 : 2)
+        ))
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(updated)]),
+            notificationService: notifications
+        )
+        viewModel.applyPreviewSnapshot(initial)
+
+        let preference: WritableKeyPath<MeterPreferences, Bool> = meterID == .credits
+            ? \.creditsAddedNotificationsEnabled
+            : increases ? \.resetsAddedNotificationsEnabled : \.resetsUsedNotificationsEnabled
+        viewModel.setNotificationEnabled(true, meterID: meterID, preference: preference)
+        viewModel.refreshNow()
+        try await waitUntil { notifications.evaluationCount == 1 }
+
+        let expectedBody = meterID == .credits
+            ? "20 credits remaining."
+            : increases
+                ? "4 usage limit resets remaining."
+                : "2 usage limit resets remaining. A reset was used or expired."
+        #expect(await tracker.bodies == [expectedBody])
+    }
+
     @Test
     func persistsBalanceNotificationOptionsAndRequestsPermission() async throws {
         let defaults = UserDefaults(suiteName: #function)!

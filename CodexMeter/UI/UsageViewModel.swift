@@ -25,6 +25,7 @@ final class UsageViewModel: ObservableObject {
     private let now: @Sendable () -> Date
 
     private var refreshTask: Task<Void, Never>?
+    private var notificationTask: Task<Void, Never>?
     private var pollingTask: Task<Void, Never>?
     private var wakeObserverTask: Task<Void, Never>?
     private var didStart = false
@@ -341,23 +342,27 @@ final class UsageViewModel: ObservableObject {
             do {
                 let freshSnapshot = try await usageService.fetchUsageSnapshot()
 
-                let notificationSettings: [UsageMeterID: MeterPreferences] = await MainActor.run { [weak self] in
+                let evaluationTask = await MainActor.run { [weak self] in
                     guard let self, Task.isCancelled == false else {
-                        return [:]
+                        return nil as Task<Void, Never>?
                     }
 
                     snapshot = freshSnapshot
                     loadState = .loaded
                     reconcileMenuBarDisplayMode(with: freshSnapshot)
-                    return Dictionary(uniqueKeysWithValues: freshSnapshot.meters.map { meter in
+                    let settings = Dictionary(uniqueKeysWithValues: freshSnapshot.meters.map { meter in
                         (meter.id, self.preferences(for: meter.id))
                     })
+                    let previousTask = notificationTask
+                    let task = Task {
+                        await previousTask?.value
+                        await notificationService.evaluateNotifications(for: freshSnapshot, settings: settings)
+                    }
+                    notificationTask = task
+                    return task
                 }
 
-                await notificationService.evaluateNotifications(
-                    for: freshSnapshot,
-                    settings: notificationSettings
-                )
+                await evaluationTask?.value
             } catch let error as UsageServiceError {
                 await MainActor.run { [weak self] in
                     self?.handleRefreshFailure(error)
@@ -411,6 +416,17 @@ final class UsageViewModel: ObservableObject {
         change(&preferences)
         meterPreferences[meterID] = preferences
         preferencesStore.meterPreferences = meterPreferences
+
+        guard let meter = snapshot?.meter(id: meterID), meter.kind != .rateLimit else {
+            return
+        }
+
+        // Apply preference changes in order before evaluating the next fetched balance.
+        let previousTask = notificationTask
+        notificationTask = Task { [notificationService] in
+            await previousTask?.value
+            await notificationService.updateAmountNotificationPreferences(for: meter, preferences: preferences)
+        }
     }
 
     private func reconcileMenuBarDisplayMode(with snapshot: UsageSnapshot) {

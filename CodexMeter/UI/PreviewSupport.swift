@@ -99,6 +99,10 @@ private struct PreviewAppLauncher: AppLaunching {
 
 private struct PreviewNotificationService: NotificationScheduling {
     func requestAuthorizationIfNeeded() async -> Bool { true }
+    func updateAmountNotificationPreferences(
+        for meter: UsageMeterViewData,
+        preferences: MeterPreferences
+    ) async {}
     func evaluateNotifications(
         for snapshot: UsageSnapshot,
         settings: [UsageMeterID: MeterPreferences]
