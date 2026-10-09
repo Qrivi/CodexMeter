@@ -284,6 +284,24 @@ final class UsageViewModel: ObservableObject {
         }
     }
 
+    func selectCreditsNotificationThreshold(_ threshold: CreditsNotificationThreshold?) {
+        updatePreferences(for: .credits) { $0.creditsNotificationThreshold = threshold }
+        if threshold != nil {
+            Task { _ = await notificationService.requestAuthorizationIfNeeded() }
+        }
+    }
+
+    func setNotificationEnabled(
+        _ isEnabled: Bool,
+        meterID: UsageMeterID,
+        preference: WritableKeyPath<MeterPreferences, Bool>
+    ) {
+        updatePreferences(for: meterID) { $0[keyPath: preference] = isEnabled }
+        if isEnabled {
+            Task { _ = await notificationService.requestAuthorizationIfNeeded() }
+        }
+    }
+
     func openUsageDashboard() {
         Task {
             let opened = await appLauncher.openUsageDashboard()

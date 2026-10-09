@@ -56,7 +56,8 @@ enum UsageFormatting {
             remainingPercent: nil,
             level: .neutral,
             resetDate: nil,
-            isAvailable: creditsValue != "Unavailable"
+            isAvailable: creditsValue != "Unavailable",
+            remainingAmount: creditsAmount(from: response.credits)
         ))
 
         let resetCount = response.rateLimitResetCredits?.availableCount
@@ -69,7 +70,8 @@ enum UsageFormatting {
             remainingPercent: nil,
             level: .neutral,
             resetDate: nil,
-            isAvailable: resetCount != nil
+            isAvailable: resetCount != nil,
+            remainingAmount: resetCount.map(Double.init)
         ))
 
         return UsageSnapshot(meters: meters, lastUpdated: now, warningMessage: nil)
@@ -299,6 +301,15 @@ enum UsageFormatting {
         calendar.locale = locale
         calendar.timeZone = timeZone
         return calendar
+    }
+
+    static func creditsAmount(from credits: CreditsInfo?) -> Double? {
+        guard let credits, credits.unlimited != true else { return nil }
+        if let balance = credits.balance?.stringValue,
+           let amount = Double(balance), amount.isFinite {
+            return amount
+        }
+        return credits.hasCredits == false ? 0 : nil
     }
 
     static func creditsText(from credits: CreditsInfo?) -> String {

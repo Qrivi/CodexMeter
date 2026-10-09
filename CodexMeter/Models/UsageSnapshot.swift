@@ -46,6 +46,7 @@ struct UsageMeterViewData: Equatable, Identifiable, Sendable {
     let resetDate: Date?
     let isAvailable: Bool
     let compactTitle: String?
+    let remainingAmount: Double?
 
     nonisolated init(
         id: UsageMeterID,
@@ -57,7 +58,8 @@ struct UsageMeterViewData: Equatable, Identifiable, Sendable {
         level: UsageLevel,
         resetDate: Date?,
         isAvailable: Bool,
-        compactTitle: String? = nil
+        compactTitle: String? = nil,
+        remainingAmount: Double? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -69,15 +71,11 @@ struct UsageMeterViewData: Equatable, Identifiable, Sendable {
         self.resetDate = resetDate
         self.isAvailable = isAvailable
         self.compactTitle = compactTitle
+        self.remainingAmount = remainingAmount
     }
 
     nonisolated var supportsNotifications: Bool {
-        switch kind {
-        case .rateLimit:
-            true
-        case .credits, .usageLimitResets:
-            false
-        }
+        kind == .rateLimit || remainingAmount != nil
     }
 }
 

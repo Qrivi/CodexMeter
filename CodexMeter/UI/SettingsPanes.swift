@@ -163,12 +163,7 @@ struct MeterSettingsPane: View {
                     }
 
                     if let resetsMeter = snapshot.usageLimitResetsMeter {
-                        SettingsToggleRow(
-                            title: "Usage limit resets",
-                            description: "Show available usage limit resets in the menu bar app.",
-                            isOn: visibilityBinding(for: resetsMeter.id)
-                        )
-                        .disabled(resetsMeter.isAvailable == false)
+                        meterSettingsBlock(for: resetsMeter)
                     }
                 }
             } else {
@@ -199,32 +194,78 @@ struct MeterSettingsPane: View {
                 Label("This usage meter is currently not available.", systemImage: "info.circle")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-            } else if isVisible && meter.supportsNotifications {
-                VStack(alignment: .leading, spacing: 12) {
-                    SettingsPickerRow(
-                        title: "Low usage notification",
-                        description: "Notify when the remaining percentage is reached.",
-                        selection: notificationThresholdBinding(for: meter.id),
-                        options: [nil] + NotificationThreshold.allCases.map(Optional.some),
-                        label: { threshold in threshold?.title ?? "Off" },
-                        showsDividerBefore: { $0 == .some(.twenty) }
-                    )
-
-                    SettingsToggleRow(
-                        title: "Limit reset notification",
-                        description: "Notify after this meter returns to a full allowance.",
-                        isOn: resetNotificationsBinding(for: meter.id)
-                    )
-                }
-                .transition(meterDetailsTransition)
             } else if isVisible {
-                Label("Usage notifications are not available for credits.", systemImage: "info.circle")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                notificationSettings(for: meter)
                     .transition(meterDetailsTransition)
             }
         }
         .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private func notificationSettings(for meter: UsageMeterViewData) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            switch meter.kind {
+            case .rateLimit:
+                SettingsPickerRow(
+                    title: "Low usage notification",
+                    description: "Notify when the remaining percentage is reached.",
+                    selection: notificationThresholdBinding(for: meter.id),
+                    options: [nil] + NotificationThreshold.allCases.map(Optional.some),
+                    label: { $0?.title ?? "Off" },
+                    showsDividerBefore: { $0 == .some(.twenty) }
+                )
+                SettingsToggleRow(
+                    title: "Limit reset notification",
+                    description: "Notify after this meter returns to a full allowance.",
+                    isOn: resetNotificationsBinding(for: meter.id)
+                )
+            case .credits:
+                if meter.supportsNotifications {
+                    SettingsPickerRow(
+                        title: "Low credits notification",
+                        description: "Notify at or below this credit balance.",
+                        selection: Binding(
+                            get: { viewModel.preferences(for: .credits).creditsNotificationThreshold },
+                            set: { viewModel.selectCreditsNotificationThreshold($0) }
+                        ),
+                        options: [nil] + CreditsNotificationThreshold.allCases.map(Optional.some),
+                        label: { $0?.title ?? "Off" },
+                        showsDividerBefore: { $0 == .some(.twoHundredFifty) }
+                    )
+                    SettingsToggleRow(
+                        title: "Credits added notification",
+                        description: "Notify when credits are added.",
+                        isOn: notificationBinding(for: meter.id, preference: \.creditsAddedNotificationsEnabled)
+                    )
+                } else {
+                    Label("Notifications require a numeric credit balance.", systemImage: "info.circle")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            case .usageLimitResets:
+                SettingsToggleRow(
+                    title: "Reset used notification",
+                    description: "Notify when a reset is used or expires.",
+                    isOn: notificationBinding(for: meter.id, preference: \.resetsUsedNotificationsEnabled)
+                )
+                SettingsToggleRow(
+                    title: "Reset added notification",
+                    description: "Notify when resets are added.",
+                    isOn: notificationBinding(for: meter.id, preference: \.resetsAddedNotificationsEnabled)
+                )
+            }
+        }
+    }
+
+    private func notificationBinding(
+        for meterID: UsageMeterID,
+        preference: WritableKeyPath<MeterPreferences, Bool>
+    ) -> Binding<Bool> {
+        Binding(
+            get: { viewModel.preferences(for: meterID)[keyPath: preference] },
+            set: { viewModel.setNotificationEnabled($0, meterID: meterID, preference: preference) }
+        )
     }
 
     private var meterDetailsTransition: AnyTransition {

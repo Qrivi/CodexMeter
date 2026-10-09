@@ -5,6 +5,31 @@ import Testing
 @MainActor
 struct UsageViewModelTests {
     @Test
+    func persistsBalanceNotificationOptionsAndRequestsPermission() async throws {
+        let defaults = UserDefaults(suiteName: #function)!
+        defer { defaults.removePersistentDomain(forName: #function) }
+        let store = PreferencesStore(userDefaults: defaults)
+        let notifications = MockNotificationService()
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: []),
+            preferencesStore: store,
+            notificationService: notifications
+        )
+        viewModel.selectCreditsNotificationThreshold(.fifty)
+        viewModel.setNotificationEnabled(true, meterID: .credits, preference: \.creditsAddedNotificationsEnabled)
+        viewModel.setNotificationEnabled(true, meterID: .usageLimitResets, preference: \.resetsUsedNotificationsEnabled)
+        viewModel.setNotificationEnabled(true, meterID: .usageLimitResets, preference: \.resetsAddedNotificationsEnabled)
+        try await waitUntil { notifications.authorizationRequestCount == 4 }
+        #expect(store.meterPreferences[.credits] == MeterPreferences(creditsNotificationThreshold: .fifty, creditsAddedNotificationsEnabled: true))
+        #expect(store.meterPreferences[.usageLimitResets] == MeterPreferences(resetsUsedNotificationsEnabled: true, resetsAddedNotificationsEnabled: true))
+
+        viewModel.selectCreditsNotificationThreshold(nil)
+        viewModel.setNotificationEnabled(false, meterID: .credits, preference: \.creditsAddedNotificationsEnabled)
+        #expect(store.meterPreferences[.credits] == MeterPreferences())
+        #expect(notifications.authorizationRequestCount == 4)
+    }
+
+    @Test
     func usageLimitResetsVisibilityPersistsIndependentlyOfCredits() async throws {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)

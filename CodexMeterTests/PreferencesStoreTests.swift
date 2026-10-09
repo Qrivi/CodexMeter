@@ -5,6 +5,28 @@ import Testing
 @MainActor
 struct PreferencesStoreTests {
     @Test
+    func preservesExistingPreferencesWhenNewNotificationFieldsAreMissing() {
+        let defaults = UserDefaults(suiteName: #function)!
+        defer { defaults.removePersistentDomain(forName: #function) }
+        defaults.set(Data(#"{"codex.primary":{"isVisible":false,"notificationThreshold":10,"resetNotificationsEnabled":true},"credits":{"isVisible":true,"resetNotificationsEnabled":false}}"#.utf8), forKey: "meterPreferences.v2")
+        let preferences = PreferencesStore(userDefaults: defaults).meterPreferences
+        #expect(preferences[.primary] == MeterPreferences(isVisible: false, notificationThreshold: .ten, resetNotificationsEnabled: true))
+        #expect(preferences[.credits] == MeterPreferences())
+    }
+
+    @Test
+    func persistsCreditAndResetNotifications() {
+        let defaults = UserDefaults(suiteName: #function)!
+        defer { defaults.removePersistentDomain(forName: #function) }
+        let preferences: [UsageMeterID: MeterPreferences] = [
+            .credits: MeterPreferences(creditsNotificationThreshold: .fifty, creditsAddedNotificationsEnabled: true),
+            .usageLimitResets: MeterPreferences(resetsUsedNotificationsEnabled: true, resetsAddedNotificationsEnabled: true)
+        ]
+        PreferencesStore(userDefaults: defaults).meterPreferences = preferences
+        #expect(PreferencesStore(userDefaults: defaults).meterPreferences == preferences)
+    }
+
+    @Test
     func providesExpectedDefaults() {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)

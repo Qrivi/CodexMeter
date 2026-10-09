@@ -13,6 +13,12 @@ actor NotificationService: NotificationScheduling {
         var hasNotifiedAtResetLevel = false
     }
 
+    private struct AmountNotificationState: Sendable {
+        var amount: Double
+        var preferences: MeterPreferences
+        var hasNotifiedLow = false
+    }
+
     nonisolated private static let resetRemainingPercent = 99
 
     private let authorizationRequester: @Sendable () async -> Bool
@@ -20,6 +26,7 @@ actor NotificationService: NotificationScheduling {
     private let requestDeliverer: @Sendable (UNNotificationRequest) async -> Void
     private var thresholdStateByMeter: [UsageMeterID: ThresholdNotificationState] = [:]
     private var resetStateByMeter: [UsageMeterID: ResetNotificationState] = [:]
+    private var amountStateByMeter: [UsageMeterID: AmountNotificationState] = [:]
 
     init(center: UNUserNotificationCenter = .current()) {
         self.authorizationRequester = {
@@ -76,26 +83,92 @@ actor NotificationService: NotificationScheduling {
         let enabledIDs = Set(enabledMeters.map(\.id))
         thresholdStateByMeter = thresholdStateByMeter.filter { enabledIDs.contains($0.key) }
         resetStateByMeter = resetStateByMeter.filter { enabledIDs.contains($0.key) }
+        let amountEnabledIDs = Set(enabledMeters.filter { meter in
+            let preferences = settings[meter.id] ?? MeterPreferences()
+            return meter.kind == .credits
+                ? preferences.creditsNotificationThreshold != nil || preferences.creditsAddedNotificationsEnabled
+                : meter.kind == .usageLimitResets
+                    && (preferences.resetsUsedNotificationsEnabled || preferences.resetsAddedNotificationsEnabled)
+        }.map(\.id))
+        amountStateByMeter = amountStateByMeter.filter { amountEnabledIDs.contains($0.key) }
 
         guard enabledMeters.contains(where: { meter in
             let preferences = settings[meter.id] ?? MeterPreferences()
             return preferences.notificationThreshold != nil || preferences.resetNotificationsEnabled
+                || amountEnabledIDs.contains(meter.id)
         }) else {
             return
         }
 
         let status = await authorizationStatusProvider()
         guard [.authorized, .provisional].contains(status) else {
+            amountStateByMeter.removeAll()
             return
         }
 
         for meter in enabledMeters {
             let preferences = settings[meter.id] ?? MeterPreferences()
-            await evaluate(
-                meter: meter,
-                threshold: preferences.notificationThreshold,
-                resetNotificationsEnabled: preferences.resetNotificationsEnabled
-            )
+            if meter.kind == .rateLimit {
+                await evaluate(
+                    meter: meter,
+                    threshold: preferences.notificationThreshold,
+                    resetNotificationsEnabled: preferences.resetNotificationsEnabled
+                )
+            } else if amountEnabledIDs.contains(meter.id) {
+                await evaluateAmountNotifications(meter: meter, preferences: preferences)
+            }
+        }
+    }
+
+    private func evaluateAmountNotifications(meter: UsageMeterViewData, preferences: MeterPreferences) async {
+        guard let amount = meter.remainingAmount, amount.isFinite else {
+            amountStateByMeter[meter.id] = nil
+            return
+        }
+        let previous = amountStateByMeter[meter.id]
+        var state = AmountNotificationState(amount: amount, preferences: preferences)
+        var messages: [(event: String, title: String, body: String)] = []
+
+        if meter.kind == .credits {
+            if let threshold = preferences.creditsNotificationThreshold {
+                state.hasNotifiedLow = previous?.preferences.creditsNotificationThreshold == threshold
+                    && previous?.hasNotifiedLow == true
+                if amount > Double(threshold.rawValue) {
+                    state.hasNotifiedLow = false
+                } else if state.hasNotifiedLow == false {
+                    messages.append(("threshold-\(threshold.rawValue)", "Credits are low", "\(meter.valueText) credits remaining."))
+                    state.hasNotifiedLow = true
+                }
+            }
+            if let previous, amount > previous.amount,
+               preferences.creditsAddedNotificationsEnabled,
+               previous.preferences.creditsAddedNotificationsEnabled {
+                messages.append(("added", "Credits added", "\(meter.valueText) credits remaining."))
+            }
+        } else if let previous {
+            if amount < previous.amount,
+               preferences.resetsUsedNotificationsEnabled,
+               previous.preferences.resetsUsedNotificationsEnabled {
+                messages.append(("decreased", "Usage limit reset count decreased", "\(meter.valueText) usage limit resets remaining. A reset was used or expired."))
+            } else if amount > previous.amount,
+                      preferences.resetsAddedNotificationsEnabled,
+                      previous.preferences.resetsAddedNotificationsEnabled {
+                messages.append(("added", "Usage limit resets added", "\(meter.valueText) usage limit resets remaining."))
+            }
+        }
+
+        // Record the observation before delivery yields to another evaluation.
+        amountStateByMeter[meter.id] = state
+        for message in messages {
+            let content = UNMutableNotificationContent()
+            content.title = message.title
+            content.body = message.body
+            content.sound = .default
+            await requestDeliverer(UNNotificationRequest(
+                identifier: "codexmeter-\(identifierComponent(for: meter.id))-\(message.event)",
+                content: content,
+                trigger: nil
+            ))
         }
     }
 

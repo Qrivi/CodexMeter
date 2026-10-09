@@ -26,7 +26,7 @@ struct UsageServiceTests {
         let meter = try #require(snapshot.usageLimitResetsMeter)
         #expect(meter.valueText == expectedValue)
         #expect(meter.isAvailable == isAvailable)
-        #expect(meter.supportsNotifications == false)
+        #expect(meter.supportsNotifications == isAvailable)
         #expect(meter.remainingPercent == nil)
         #expect(meter.resetDate == nil)
         #expect(snapshot.meters.suffix(2).map(\.id) == [.credits, .usageLimitResets])

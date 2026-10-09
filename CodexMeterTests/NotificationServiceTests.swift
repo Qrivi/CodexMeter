@@ -6,6 +6,93 @@ import UserNotifications
 @MainActor
 struct NotificationServiceTests {
     @Test
+    func creditThresholdUsesUnroundedBalanceAndRearmsAfterTopUp() async {
+        let tracker = NotificationTracker()
+        let service = makeNotificationService(tracker: tracker)
+        let settings: [UsageMeterID: MeterPreferences] = [.credits: MeterPreferences(creditsNotificationThreshold: .ten)]
+        await service.evaluateNotifications(for: balanceSnapshot(credits: 10.4), settings: settings)
+        #expect(await tracker.bodies.isEmpty)
+        for balance in [9.9, 8, 20, 10, 0] {
+            await service.evaluateNotifications(for: balanceSnapshot(credits: balance), settings: settings)
+        }
+        #expect(await tracker.bodies == ["10 credits remaining.", "10 credits remaining."])
+    }
+
+    @Test
+    func creditThresholdRearmsWhenChangedOrDisabled() async {
+        let tracker = NotificationTracker()
+        let service = makeNotificationService(tracker: tracker)
+        let snapshot = balanceSnapshot(credits: 9)
+        let ten: [UsageMeterID: MeterPreferences] = [.credits: MeterPreferences(creditsNotificationThreshold: .ten)]
+        await service.evaluateNotifications(for: snapshot, settings: ten)
+        await service.evaluateNotifications(for: snapshot, settings: [.credits: MeterPreferences(creditsNotificationThreshold: .fifty)])
+        await service.evaluateNotifications(for: snapshot, settings: [:])
+        await service.evaluateNotifications(for: snapshot, settings: ten)
+        #expect(await tracker.identifiers == ["codexmeter-credits-threshold-10", "codexmeter-credits-threshold-50", "codexmeter-credits-threshold-10"])
+    }
+
+    @Test
+    func creditsAddedNotificationIncludesTotalAndDoesNotFireOnFirstObservation() async {
+        let tracker = NotificationTracker()
+        let service = makeNotificationService(tracker: tracker)
+        let settings: [UsageMeterID: MeterPreferences] = [.credits: MeterPreferences(creditsAddedNotificationsEnabled: true)]
+        for balance in [500.0, 500, 400, 650, 650] {
+            await service.evaluateNotifications(for: balanceSnapshot(credits: balance), settings: settings)
+        }
+        #expect(await tracker.identifiers == ["codexmeter-credits-added"])
+        #expect(await tracker.bodies == ["650 credits remaining."])
+    }
+
+    @Test(arguments: [(true, false), (false, true), (true, true)])
+    func resetChangeTogglesAreIndependent(used: Bool, added: Bool) async {
+        let tracker = NotificationTracker()
+        let service = makeNotificationService(tracker: tracker)
+        let settings: [UsageMeterID: MeterPreferences] = [
+            .usageLimitResets: MeterPreferences(resetsUsedNotificationsEnabled: used, resetsAddedNotificationsEnabled: added)
+        ]
+        for count in [3, 3, 2, 2, 4, 4, 0] {
+            await service.evaluateNotifications(for: balanceSnapshot(resets: count), settings: settings)
+        }
+        var expected: [String] = []
+        if used { expected.append("2 usage limit resets remaining. A reset was used or expired.") }
+        if added { expected.append("4 usage limit resets remaining.") }
+        if used { expected.append("0 usage limit resets remaining. A reset was used or expired.") }
+        #expect(await tracker.bodies == expected)
+    }
+
+    @Test
+    func changesWhileDisabledHiddenOrUnavailableDoNotProduceCatchUpNotifications() async {
+        let tracker = NotificationTracker()
+        let service = makeNotificationService(tracker: tracker)
+        let enabled = MeterPreferences(creditsAddedNotificationsEnabled: true)
+        await service.evaluateNotifications(for: balanceSnapshot(credits: 10), settings: [.credits: enabled])
+        await service.evaluateNotifications(for: balanceSnapshot(credits: 20), settings: [:])
+        await service.evaluateNotifications(for: balanceSnapshot(credits: 30), settings: [.credits: enabled])
+        await service.evaluateNotifications(for: balanceSnapshot(), settings: [.credits: enabled])
+        await service.evaluateNotifications(for: balanceSnapshot(credits: 40), settings: [.credits: enabled])
+        var hidden = enabled
+        hidden.isVisible = false
+        await service.evaluateNotifications(for: balanceSnapshot(credits: 50), settings: [.credits: hidden])
+        await service.evaluateNotifications(for: balanceSnapshot(credits: 60), settings: [.credits: enabled])
+        #expect(await tracker.bodies.isEmpty)
+        await service.evaluateNotifications(for: balanceSnapshot(credits: 70), settings: [.credits: enabled])
+        #expect(await tracker.bodies == ["70 credits remaining."])
+    }
+
+    @Test
+    func unlimitedCreditsDoNotTriggerBalanceNotifications() async {
+        let tracker = NotificationTracker()
+        let service = makeNotificationService(tracker: tracker)
+        let settings: [UsageMeterID: MeterPreferences] = [.credits: MeterPreferences(creditsNotificationThreshold: .ten, creditsAddedNotificationsEnabled: true)]
+        let snapshot = UsageFormatting.snapshot(from: UsageResponse(
+            planType: nil, rateLimit: nil, additionalRateLimits: nil,
+            credits: CreditsInfo(unlimited: true, balance: .int(0), hasCredits: true)
+        ))
+        await service.evaluateNotifications(for: snapshot, settings: settings)
+        #expect(await tracker.bodies.isEmpty)
+    }
+
+    @Test
     func enablingNotificationsRequestsPermission() async {
         let tracker = NotificationTracker()
         let service = NotificationService(
@@ -218,6 +305,16 @@ struct NotificationServiceTests {
         #expect(identifiers.count == 2)
         #expect(Set(identifiers).count == 2)
     }
+}
+
+private func balanceSnapshot(credits: Double? = nil, resets: Int? = nil) -> UsageSnapshot {
+    UsageFormatting.snapshot(from: UsageResponse(
+        planType: nil,
+        rateLimit: nil,
+        additionalRateLimits: nil,
+        credits: credits.map { CreditsInfo(unlimited: false, balance: .double($0), hasCredits: true) },
+        rateLimitResetCredits: resets.map { RateLimitResetCreditsInfo(availableCount: $0) }
+    ))
 }
 
 private func notificationSettings(

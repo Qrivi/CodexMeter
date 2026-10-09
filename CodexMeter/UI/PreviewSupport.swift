@@ -36,7 +36,8 @@ enum PreviewSupport {
             remainingPercent: nil,
             level: .neutral,
             resetDate: nil,
-            isAvailable: true
+            isAvailable: true,
+            remainingAmount: 12
         ),
         UsageMeterViewData(
             id: .usageLimitResets,
@@ -47,7 +48,8 @@ enum PreviewSupport {
             remainingPercent: nil,
             level: .neutral,
             resetDate: nil,
-            isAvailable: true
+            isAvailable: true,
+            remainingAmount: 3
         )],
         lastUpdated: Date(timeIntervalSince1970: 1_778_054_820),
         warningMessage: nil
