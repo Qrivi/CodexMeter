@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 
 struct AppLauncher: AppLaunching {
-    static let usageDashboardURL = URL(string: "https://chatgpt.com/codex/cloud/settings/analytics#usage")!
+    static let usageDashboardURL = URL(string: "https://chatgpt.com/settings/usage?tab=overview")!
     static let codexURL = URL(string: "codex://")!
     static let codexBundleIdentifier = "com.openai.codex"
     static let codexFallbackPath = "/Applications/Codex.app"

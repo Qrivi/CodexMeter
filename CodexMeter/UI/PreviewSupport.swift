@@ -36,7 +36,20 @@ enum PreviewSupport {
             remainingPercent: nil,
             level: .neutral,
             resetDate: nil,
-            isAvailable: true
+            isAvailable: true,
+            remainingAmount: 12
+        ),
+        UsageMeterViewData(
+            id: .usageLimitResets,
+            kind: .usageLimitResets,
+            title: "Usage limit resets",
+            valueText: "3",
+            resetText: nil,
+            remainingPercent: nil,
+            level: .neutral,
+            resetDate: nil,
+            isAvailable: true,
+            remainingAmount: 3
         )],
         lastUpdated: Date(timeIntervalSince1970: 1_778_054_820),
         warningMessage: nil
@@ -86,6 +99,10 @@ private struct PreviewAppLauncher: AppLaunching {
 
 private struct PreviewNotificationService: NotificationScheduling {
     func requestAuthorizationIfNeeded() async -> Bool { true }
+    func updateAmountNotificationPreferences(
+        for meter: UsageMeterViewData,
+        preferences: MeterPreferences
+    ) async {}
     func evaluateNotifications(
         for snapshot: UsageSnapshot,
         settings: [UsageMeterID: MeterPreferences]

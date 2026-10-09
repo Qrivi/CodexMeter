@@ -159,12 +159,28 @@ struct FormattingTests {
     }
 
     @Test
-    func rendersCreditsAsUnlimitedOrRawBalance() {
+    func rendersCreditsAsUnlimited() {
         let unlimitedCredits = CreditsInfo(unlimited: true, balance: .int(0), hasCredits: true)
-        let finiteCredits = CreditsInfo(unlimited: false, balance: .string("42.5"), hasCredits: true)
 
         #expect(UsageFormatting.creditsText(from: unlimitedCredits) == "Unlimited")
-        #expect(UsageFormatting.creditsText(from: finiteCredits) == "42.5")
+    }
+
+    @Test(arguments: [
+        (FlexibleValue.string("500.0000000000"), "500"),
+        (.string("42.4"), "42"),
+        (.string("42.6"), "43"),
+        (.string("0.0000000000"), "0"),
+        (.int(500), "500"),
+        (.double(42.6), "43")
+    ])
+    func rendersCreditsAsWholeNumbers(balance: FlexibleValue, expected: String) {
+        let credits = CreditsInfo(unlimited: false, balance: balance, hasCredits: true)
+        let snapshot = UsageFormatting.snapshot(from: UsageResponse(
+            planType: nil, rateLimit: nil, additionalRateLimits: nil, credits: credits
+        ))
+
+        #expect(snapshot.creditsMeter?.valueText == expected)
+        #expect(UsageFormatting.menuBarLabel(snapshot: snapshot, mode: .credits, state: .loaded) == "\(expected) cr")
     }
 
     @Test

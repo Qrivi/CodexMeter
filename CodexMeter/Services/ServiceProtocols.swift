@@ -20,6 +20,10 @@ protocol AppLaunching: Sendable {
 
 protocol NotificationScheduling: Sendable {
     func requestAuthorizationIfNeeded() async -> Bool
+    func updateAmountNotificationPreferences(
+        for meter: UsageMeterViewData,
+        preferences: MeterPreferences
+    ) async
     func evaluateNotifications(
         for snapshot: UsageSnapshot,
         settings: [UsageMeterID: MeterPreferences]

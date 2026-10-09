@@ -8,6 +8,7 @@ struct UsageMeterID: RawRepresentable, Hashable, Codable, Identifiable, Sendable
     static let primary = UsageMeterID(rawValue: "codex.primary")
     static let secondary = UsageMeterID(rawValue: "codex.secondary")
     static let credits = UsageMeterID(rawValue: "credits")
+    static let usageLimitResets = UsageMeterID(rawValue: "usage_limit_resets")
 
     static func additional(feature: String, slot: RateLimitWindowSlot) -> UsageMeterID {
         UsageMeterID(rawValue: "additional.\(feature).\(slot.rawValue)")
@@ -31,6 +32,7 @@ enum RateLimitWindowSlot: String, Sendable {
 enum UsageMeterKind: Equatable, Sendable {
     case rateLimit
     case credits
+    case usageLimitResets
 }
 
 struct UsageMeterViewData: Equatable, Identifiable, Sendable {
@@ -44,6 +46,7 @@ struct UsageMeterViewData: Equatable, Identifiable, Sendable {
     let resetDate: Date?
     let isAvailable: Bool
     let compactTitle: String?
+    let remainingAmount: Double?
 
     nonisolated init(
         id: UsageMeterID,
@@ -55,7 +58,8 @@ struct UsageMeterViewData: Equatable, Identifiable, Sendable {
         level: UsageLevel,
         resetDate: Date?,
         isAvailable: Bool,
-        compactTitle: String? = nil
+        compactTitle: String? = nil,
+        remainingAmount: Double? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -67,15 +71,11 @@ struct UsageMeterViewData: Equatable, Identifiable, Sendable {
         self.resetDate = resetDate
         self.isAvailable = isAvailable
         self.compactTitle = compactTitle
+        self.remainingAmount = remainingAmount
     }
 
     nonisolated var supportsNotifications: Bool {
-        switch kind {
-        case .rateLimit:
-            true
-        case .credits:
-            false
-        }
+        kind == .rateLimit || remainingAmount != nil
     }
 }
 
@@ -98,6 +98,10 @@ struct UsageSnapshot: Equatable, Sendable {
 
     var creditsMeter: UsageMeterViewData? {
         meter(id: .credits)
+    }
+
+    var usageLimitResetsMeter: UsageMeterViewData? {
+        meter(id: .usageLimitResets)
     }
 
     func withMessages(warningMessage: String? = nil) -> UsageSnapshot {

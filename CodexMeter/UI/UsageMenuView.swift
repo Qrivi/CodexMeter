@@ -55,6 +55,8 @@ struct UsageMenuView: View {
     private func usageSections(snapshot: UsageSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 20) {
             let visibleMeters = viewModel.visibleMeters(in: snapshot)
+            let rateLimitMeters = visibleMeters.filter { $0.kind == .rateLimit }
+            let creditsAndResets = visibleMeters.filter { $0.kind == .credits || $0.kind == .usageLimitResets }
 
             if visibleMeters.isEmpty {
                 Text(viewModel.meterEmptyStateMessage(in: snapshot))
@@ -62,12 +64,24 @@ struct UsageMenuView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
-                ForEach(visibleMeters) { meter in
+                ForEach(rateLimitMeters) { meter in
                     UsageSectionView(
                         meter: meter,
                         meterColorMode: viewModel.meterColorMode,
                         remainingLabelColorMode: viewModel.remainingLabelColorMode
                     )
+                }
+
+                if creditsAndResets.isEmpty == false {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(creditsAndResets) { meter in
+                            UsageSectionView(
+                                meter: meter,
+                                meterColorMode: viewModel.meterColorMode,
+                                remainingLabelColorMode: viewModel.remainingLabelColorMode
+                            )
+                        }
+                    }
                 }
             }
         }

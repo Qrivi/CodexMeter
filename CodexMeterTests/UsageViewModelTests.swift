@@ -4,6 +4,104 @@ import Testing
 
 @MainActor
 struct UsageViewModelTests {
+    @Test(arguments: [
+        (UsageMeterID.credits, true),
+        (.usageLimitResets, true),
+        (.usageLimitResets, false)
+    ])
+    func enablingBalanceNotificationsReportsTheFirstChange(meterID: UsageMeterID, increases: Bool) async throws {
+        let tracker = NotificationTracker()
+        let notifications = MockNotificationService(underlying: makeNotificationService(tracker: tracker))
+        let initial = UsageFormatting.snapshot(from: UsageResponse(
+            planType: nil, rateLimit: nil, additionalRateLimits: nil,
+            credits: CreditsInfo(unlimited: false, balance: .int(10), hasCredits: true),
+            rateLimitResetCredits: RateLimitResetCreditsInfo(availableCount: 3)
+        ))
+        let updated = UsageFormatting.snapshot(from: UsageResponse(
+            planType: nil, rateLimit: nil, additionalRateLimits: nil,
+            credits: CreditsInfo(unlimited: false, balance: .int(20), hasCredits: true),
+            rateLimitResetCredits: RateLimitResetCreditsInfo(availableCount: increases ? 4 : 2)
+        ))
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(updated)]),
+            notificationService: notifications
+        )
+        viewModel.applyPreviewSnapshot(initial)
+
+        let preference: WritableKeyPath<MeterPreferences, Bool> = meterID == .credits
+            ? \.creditsAddedNotificationsEnabled
+            : increases ? \.resetsAddedNotificationsEnabled : \.resetsUsedNotificationsEnabled
+        viewModel.setNotificationEnabled(true, meterID: meterID, preference: preference)
+        viewModel.refreshNow()
+        try await waitUntil { notifications.evaluationCount == 1 }
+
+        let expectedBody = meterID == .credits
+            ? "20 credits remaining."
+            : increases
+                ? "4 usage limit resets remaining."
+                : "2 usage limit resets remaining. A reset was used or expired."
+        #expect(await tracker.bodies == [expectedBody])
+    }
+
+    @Test
+    func persistsBalanceNotificationOptionsAndRequestsPermission() async throws {
+        let defaults = UserDefaults(suiteName: #function)!
+        defer { defaults.removePersistentDomain(forName: #function) }
+        let store = PreferencesStore(userDefaults: defaults)
+        let notifications = MockNotificationService()
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: []),
+            preferencesStore: store,
+            notificationService: notifications
+        )
+        viewModel.selectCreditsNotificationThreshold(.fifty)
+        viewModel.setNotificationEnabled(true, meterID: .credits, preference: \.creditsAddedNotificationsEnabled)
+        viewModel.setNotificationEnabled(true, meterID: .usageLimitResets, preference: \.resetsUsedNotificationsEnabled)
+        viewModel.setNotificationEnabled(true, meterID: .usageLimitResets, preference: \.resetsAddedNotificationsEnabled)
+        try await waitUntil { notifications.authorizationRequestCount == 4 }
+        #expect(store.meterPreferences[.credits] == MeterPreferences(creditsNotificationThreshold: .fifty, creditsAddedNotificationsEnabled: true))
+        #expect(store.meterPreferences[.usageLimitResets] == MeterPreferences(resetsUsedNotificationsEnabled: true, resetsAddedNotificationsEnabled: true))
+
+        viewModel.selectCreditsNotificationThreshold(nil)
+        viewModel.setNotificationEnabled(false, meterID: .credits, preference: \.creditsAddedNotificationsEnabled)
+        #expect(store.meterPreferences[.credits] == MeterPreferences())
+        #expect(notifications.authorizationRequestCount == 4)
+    }
+
+    @Test
+    func usageLimitResetsVisibilityPersistsIndependentlyOfCredits() async throws {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        defer { defaults.removePersistentDomain(forName: #function) }
+        let store = PreferencesStore(userDefaults: defaults)
+        let response = UsageResponse(
+            planType: nil,
+            rateLimit: nil,
+            additionalRateLimits: nil,
+            credits: CreditsInfo(unlimited: false, balance: .int(12), hasCredits: true),
+            rateLimitResetCredits: RateLimitResetCreditsInfo(availableCount: 3)
+        )
+        let snapshot = UsageFormatting.snapshot(from: response)
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(snapshot)]),
+            preferencesStore: store
+        )
+        viewModel.refreshNow()
+        try await waitUntil { viewModel.loadState == .loaded }
+
+        #expect(viewModel.visibleMeters(in: snapshot).map(\.id) == [.credits, .usageLimitResets])
+        viewModel.setMeterVisible(false, meterID: .usageLimitResets)
+        #expect(viewModel.visibleMeters(in: snapshot).map(\.id) == [.credits])
+
+        let restoredViewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(snapshot)]),
+            preferencesStore: PreferencesStore(userDefaults: defaults)
+        )
+        #expect(restoredViewModel.visibleMeters(in: snapshot).map(\.id) == [.credits])
+        restoredViewModel.setMeterVisible(true, meterID: .usageLimitResets)
+        #expect(restoredViewModel.visibleMeters(in: snapshot).map(\.id) == [.credits, .usageLimitResets])
+    }
+
     @MainActor
     @Test
     func launchRefreshPopulatesSnapshot() async throws {

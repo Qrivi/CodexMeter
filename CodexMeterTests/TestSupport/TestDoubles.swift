@@ -102,7 +102,17 @@ final class LauncherRecorder: @unchecked Sendable {
 
 final class MockNotificationService: NotificationScheduling, @unchecked Sendable {
     private let lock = NSLock()
+    private let underlying: NotificationScheduling?
     private var authorizationRequestCountValue = 0
+    private var evaluationCountValue = 0
+
+    init(underlying: NotificationScheduling? = nil) {
+        self.underlying = underlying
+    }
+
+    var evaluationCount: Int {
+        lock.withLock { evaluationCountValue }
+    }
 
     var authorizationRequestCount: Int {
         lock.withLock {
@@ -114,13 +124,23 @@ final class MockNotificationService: NotificationScheduling, @unchecked Sendable
         lock.withLock {
             authorizationRequestCountValue += 1
         }
-        return true
+        return await underlying?.requestAuthorizationIfNeeded() ?? true
+    }
+
+    func updateAmountNotificationPreferences(
+        for meter: UsageMeterViewData,
+        preferences: MeterPreferences
+    ) async {
+        await underlying?.updateAmountNotificationPreferences(for: meter, preferences: preferences)
     }
 
     func evaluateNotifications(
         for snapshot: UsageSnapshot,
         settings: [UsageMeterID: MeterPreferences]
-    ) async {}
+    ) async {
+        await underlying?.evaluateNotifications(for: snapshot, settings: settings)
+        lock.withLock { evaluationCountValue += 1 }
+    }
 }
 
 struct MockAppLauncher: AppLaunching {

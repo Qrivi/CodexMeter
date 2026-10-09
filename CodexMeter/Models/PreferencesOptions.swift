@@ -125,19 +125,59 @@ enum NotificationThreshold: Int, CaseIterable, Identifiable, Sendable {
     }
 }
 
+enum CreditsNotificationThreshold: Int, CaseIterable, Codable, Identifiable, Sendable {
+    case twoHundredFifty = 250
+    case hundred = 100
+    case fifty = 50
+    case twentyFive = 25
+    case ten = 10
+
+    var id: Int { rawValue }
+    var title: String { "Notify at \(rawValue) credits" }
+}
+
 struct MeterPreferences: Codable, Equatable, Sendable {
     var isVisible = true
     var notificationThreshold: NotificationThreshold?
     var resetNotificationsEnabled = false
+    var creditsNotificationThreshold: CreditsNotificationThreshold?
+    var creditsAddedNotificationsEnabled = false
+    var resetsUsedNotificationsEnabled = false
+    var resetsAddedNotificationsEnabled = false
 
     nonisolated init(
         isVisible: Bool = true,
         notificationThreshold: NotificationThreshold? = nil,
-        resetNotificationsEnabled: Bool = false
+        resetNotificationsEnabled: Bool = false,
+        creditsNotificationThreshold: CreditsNotificationThreshold? = nil,
+        creditsAddedNotificationsEnabled: Bool = false,
+        resetsUsedNotificationsEnabled: Bool = false,
+        resetsAddedNotificationsEnabled: Bool = false
     ) {
         self.isVisible = isVisible
         self.notificationThreshold = notificationThreshold
         self.resetNotificationsEnabled = resetNotificationsEnabled
+        self.creditsNotificationThreshold = creditsNotificationThreshold
+        self.creditsAddedNotificationsEnabled = creditsAddedNotificationsEnabled
+        self.resetsUsedNotificationsEnabled = resetsUsedNotificationsEnabled
+        self.resetsAddedNotificationsEnabled = resetsAddedNotificationsEnabled
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case isVisible, notificationThreshold, resetNotificationsEnabled
+        case creditsNotificationThreshold, creditsAddedNotificationsEnabled
+        case resetsUsedNotificationsEnabled, resetsAddedNotificationsEnabled
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        isVisible = try container.decodeIfPresent(Bool.self, forKey: .isVisible) ?? true
+        notificationThreshold = try container.decodeIfPresent(NotificationThreshold.self, forKey: .notificationThreshold)
+        resetNotificationsEnabled = try container.decodeIfPresent(Bool.self, forKey: .resetNotificationsEnabled) ?? false
+        creditsNotificationThreshold = try container.decodeIfPresent(CreditsNotificationThreshold.self, forKey: .creditsNotificationThreshold)
+        creditsAddedNotificationsEnabled = try container.decodeIfPresent(Bool.self, forKey: .creditsAddedNotificationsEnabled) ?? false
+        resetsUsedNotificationsEnabled = try container.decodeIfPresent(Bool.self, forKey: .resetsUsedNotificationsEnabled) ?? false
+        resetsAddedNotificationsEnabled = try container.decodeIfPresent(Bool.self, forKey: .resetsAddedNotificationsEnabled) ?? false
     }
 }
 

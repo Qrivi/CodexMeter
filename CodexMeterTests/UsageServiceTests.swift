@@ -4,6 +4,34 @@ import Testing
 
 @MainActor
 struct UsageServiceTests {
+    @Test(arguments: [
+        (#"{"rate_limit_reset_credits":{"available_count":3,"applicable_available_count":0}}"#, "3", true),
+        (#"{"rate_limit_reset_credits":{"available_count":0}}"#, "0", true),
+        (#"{"rate_limit_reset_credits":null}"#, "Unavailable", false),
+        (#"{"rate_limit_reset_credits":{}}"#, "Unavailable", false),
+        ("{}", "Unavailable", false)
+    ])
+    func decodesUsageLimitResets(payload: String, expectedValue: String, isAvailable: Bool) async throws {
+        let service = UsageService(
+            tokenProvider: MockTokenProvider(result: .success(AuthSession(accessToken: "token", accountID: nil))),
+            requestPerformer: { _ in
+                (
+                    Data(payload.utf8),
+                    HTTPURLResponse(url: UsageService.endpoint, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                )
+            }
+        )
+
+        let snapshot = try await service.fetchUsageSnapshot()
+        let meter = try #require(snapshot.usageLimitResetsMeter)
+        #expect(meter.valueText == expectedValue)
+        #expect(meter.isAvailable == isAvailable)
+        #expect(meter.supportsNotifications == isAvailable)
+        #expect(meter.remainingPercent == nil)
+        #expect(meter.resetDate == nil)
+        #expect(snapshot.meters.suffix(2).map(\.id) == [.credits, .usageLimitResets])
+    }
+
     @Test
     func decodesSuccessfulResponseIntoSnapshot() async throws {
         let payload = """
