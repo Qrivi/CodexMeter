@@ -143,7 +143,7 @@ struct MeterSettingsPane: View {
     var body: some View {
         SettingsPaneContainer {
             if let snapshot = viewModel.snapshot {
-                Section("Main Rate Limits") {
+                Section("Plan limits") {
                     ForEach(snapshot.mainRateLimitMeters) { meter in
                         meterSettingsBlock(for: meter)
                     }
@@ -157,9 +157,18 @@ struct MeterSettingsPane: View {
                     }
                 }
 
-                if let creditsMeter = snapshot.creditsMeter {
-                    Section("Credits") {
+                Section("Credits and resets") {
+                    if let creditsMeter = snapshot.creditsMeter {
                         meterSettingsBlock(for: creditsMeter)
+                    }
+
+                    if let resetsMeter = snapshot.usageLimitResetsMeter {
+                        SettingsToggleRow(
+                            title: "Usage limit resets",
+                            description: "Show available usage limit resets in the menu bar app.",
+                            isOn: visibilityBinding(for: resetsMeter.id)
+                        )
+                        .disabled(resetsMeter.isAvailable == false)
                     }
                 }
             } else {

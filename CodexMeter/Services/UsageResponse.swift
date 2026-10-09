@@ -5,6 +5,11 @@ struct UsageResponse: Decodable, Sendable {
     let rateLimit: RateLimitInfo?
     let additionalRateLimits: [AdditionalRateLimitInfo]?
     let credits: CreditsInfo?
+    var rateLimitResetCredits: RateLimitResetCreditsInfo? = nil
+}
+
+struct RateLimitResetCreditsInfo: Decodable, Sendable {
+    let availableCount: Int?
 }
 
 struct AdditionalRateLimitInfo: Decodable, Sendable {

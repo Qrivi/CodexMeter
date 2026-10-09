@@ -37,6 +37,17 @@ enum PreviewSupport {
             level: .neutral,
             resetDate: nil,
             isAvailable: true
+        ),
+        UsageMeterViewData(
+            id: .usageLimitResets,
+            kind: .usageLimitResets,
+            title: "Usage limit resets",
+            valueText: "3",
+            resetText: nil,
+            remainingPercent: nil,
+            level: .neutral,
+            resetDate: nil,
+            isAvailable: true
         )],
         lastUpdated: Date(timeIntervalSince1970: 1_778_054_820),
         warningMessage: nil

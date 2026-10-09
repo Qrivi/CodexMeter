@@ -59,6 +59,19 @@ enum UsageFormatting {
             isAvailable: creditsValue != "Unavailable"
         ))
 
+        let resetCount = response.rateLimitResetCredits?.availableCount
+        meters.append(UsageMeterViewData(
+            id: .usageLimitResets,
+            kind: .usageLimitResets,
+            title: "Usage limit resets",
+            valueText: resetCount.map { String($0) } ?? "Unavailable",
+            resetText: nil,
+            remainingPercent: nil,
+            level: .neutral,
+            resetDate: nil,
+            isAvailable: resetCount != nil
+        ))
+
         return UsageSnapshot(meters: meters, lastUpdated: now, warningMessage: nil)
     }
 

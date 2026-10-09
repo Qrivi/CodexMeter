@@ -8,6 +8,7 @@ struct UsageMeterID: RawRepresentable, Hashable, Codable, Identifiable, Sendable
     static let primary = UsageMeterID(rawValue: "codex.primary")
     static let secondary = UsageMeterID(rawValue: "codex.secondary")
     static let credits = UsageMeterID(rawValue: "credits")
+    static let usageLimitResets = UsageMeterID(rawValue: "usage_limit_resets")
 
     static func additional(feature: String, slot: RateLimitWindowSlot) -> UsageMeterID {
         UsageMeterID(rawValue: "additional.\(feature).\(slot.rawValue)")
@@ -31,6 +32,7 @@ enum RateLimitWindowSlot: String, Sendable {
 enum UsageMeterKind: Equatable, Sendable {
     case rateLimit
     case credits
+    case usageLimitResets
 }
 
 struct UsageMeterViewData: Equatable, Identifiable, Sendable {
@@ -73,7 +75,7 @@ struct UsageMeterViewData: Equatable, Identifiable, Sendable {
         switch kind {
         case .rateLimit:
             true
-        case .credits:
+        case .credits, .usageLimitResets:
             false
         }
     }
@@ -98,6 +100,10 @@ struct UsageSnapshot: Equatable, Sendable {
 
     var creditsMeter: UsageMeterViewData? {
         meter(id: .credits)
+    }
+
+    var usageLimitResetsMeter: UsageMeterViewData? {
+        meter(id: .usageLimitResets)
     }
 
     func withMessages(warningMessage: String? = nil) -> UsageSnapshot {

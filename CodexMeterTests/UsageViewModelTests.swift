@@ -4,6 +4,40 @@ import Testing
 
 @MainActor
 struct UsageViewModelTests {
+    @Test
+    func usageLimitResetsVisibilityPersistsIndependentlyOfCredits() async throws {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        defer { defaults.removePersistentDomain(forName: #function) }
+        let store = PreferencesStore(userDefaults: defaults)
+        let response = UsageResponse(
+            planType: nil,
+            rateLimit: nil,
+            additionalRateLimits: nil,
+            credits: CreditsInfo(unlimited: false, balance: .int(12), hasCredits: true),
+            rateLimitResetCredits: RateLimitResetCreditsInfo(availableCount: 3)
+        )
+        let snapshot = UsageFormatting.snapshot(from: response)
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(snapshot)]),
+            preferencesStore: store
+        )
+        viewModel.refreshNow()
+        try await waitUntil { viewModel.loadState == .loaded }
+
+        #expect(viewModel.visibleMeters(in: snapshot).map(\.id) == [.credits, .usageLimitResets])
+        viewModel.setMeterVisible(false, meterID: .usageLimitResets)
+        #expect(viewModel.visibleMeters(in: snapshot).map(\.id) == [.credits])
+
+        let restoredViewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(snapshot)]),
+            preferencesStore: PreferencesStore(userDefaults: defaults)
+        )
+        #expect(restoredViewModel.visibleMeters(in: snapshot).map(\.id) == [.credits])
+        restoredViewModel.setMeterVisible(true, meterID: .usageLimitResets)
+        #expect(restoredViewModel.visibleMeters(in: snapshot).map(\.id) == [.credits, .usageLimitResets])
+    }
+
     @MainActor
     @Test
     func launchRefreshPopulatesSnapshot() async throws {
