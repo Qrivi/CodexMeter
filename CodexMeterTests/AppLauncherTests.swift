@@ -20,7 +20,7 @@ struct AppLauncherTests {
         let success = await launcher.openUsageDashboard()
 
         #expect(success)
-        #expect(tracker.urls == [AppLauncher.usageDashboardURL])
+        #expect(tracker.urls == [URL(string: "https://chatgpt.com/settings/usage?tab=overview")!])
     }
 
     @Test

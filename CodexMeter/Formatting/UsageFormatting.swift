@@ -298,6 +298,9 @@ enum UsageFormatting {
         }
 
         if let balance = credits.balance?.stringValue, balance.isEmpty == false {
+            if let numericBalance = Double(balance), numericBalance.isFinite {
+                return numericBalance.formatted(.number.precision(.fractionLength(0)).grouping(.never))
+            }
             return balance
         }
 
