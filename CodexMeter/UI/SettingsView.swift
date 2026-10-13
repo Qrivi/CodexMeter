@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct SettingsView: View {
@@ -62,6 +63,10 @@ struct SettingsView: View {
             idealHeight: preferredHeight,
             maxHeight: .infinity
         )
+        .task { await viewModel.refreshNotificationAuthorization() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await viewModel.refreshNotificationAuthorization() }
+        }
     }
 
     @ViewBuilder

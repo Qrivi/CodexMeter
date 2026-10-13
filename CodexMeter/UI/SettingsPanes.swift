@@ -142,6 +142,37 @@ struct MeterSettingsPane: View {
 
     var body: some View {
         SettingsPaneContainer {
+            if viewModel.notificationsBlocked || viewModel.notificationPermissionErrorMessage != nil {
+                Section {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if viewModel.notificationsBlocked {
+                            Label {
+                                Text("Notifications are disabled in macOS.")
+                                    .font(.headline)
+                            } icon: {
+                                Image(systemName: "bell.slash")
+                            }
+                            Text("Turn on notifications in System Settings to receive usage alerts.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            Button("Open Notification Settings", action: viewModel.openNotificationSettings)
+                        }
+
+                        if let message = viewModel.notificationPermissionErrorMessage {
+                            Label(message, systemImage: "exclamationmark.triangle")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(
+                        viewModel.notificationsBlocked ? Color.red.opacity(0.1) : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 8)
+                    )
+                }
+            }
+
             if let snapshot = viewModel.snapshot {
                 Section("Plan limits") {
                     ForEach(snapshot.mainRateLimitMeters) { meter in
@@ -226,7 +257,7 @@ struct MeterSettingsPane: View {
                         title: "Low credits notification",
                         description: "Notify at or below this credit balance.",
                         selection: Binding(
-                            get: { viewModel.preferences(for: .credits).creditsNotificationThreshold },
+                            get: { viewModel.notificationPreferences(for: .credits).creditsNotificationThreshold },
                             set: { viewModel.selectCreditsNotificationThreshold($0) }
                         ),
                         options: [nil] + CreditsNotificationThreshold.allCases.map(Optional.some),
@@ -256,6 +287,7 @@ struct MeterSettingsPane: View {
                 )
             }
         }
+        .disabled(!viewModel.canEditNotificationPreferences)
     }
 
     private func notificationBinding(
@@ -263,7 +295,7 @@ struct MeterSettingsPane: View {
         preference: WritableKeyPath<MeterPreferences, Bool>
     ) -> Binding<Bool> {
         Binding(
-            get: { viewModel.preferences(for: meterID)[keyPath: preference] },
+            get: { viewModel.notificationPreferences(for: meterID)[keyPath: preference] },
             set: { viewModel.setNotificationEnabled($0, meterID: meterID, preference: preference) }
         )
     }
@@ -293,14 +325,14 @@ struct MeterSettingsPane: View {
 
     private func notificationThresholdBinding(for meterID: UsageMeterID) -> Binding<NotificationThreshold?> {
         Binding(
-            get: { viewModel.preferences(for: meterID).notificationThreshold },
+            get: { viewModel.notificationPreferences(for: meterID).notificationThreshold },
             set: { viewModel.selectNotificationThreshold($0, meterID: meterID) }
         )
     }
 
     private func resetNotificationsBinding(for meterID: UsageMeterID) -> Binding<Bool> {
         Binding(
-            get: { viewModel.preferences(for: meterID).resetNotificationsEnabled },
+            get: { viewModel.notificationPreferences(for: meterID).resetNotificationsEnabled },
             set: { viewModel.setResetNotificationsEnabled($0, meterID: meterID) }
         )
     }

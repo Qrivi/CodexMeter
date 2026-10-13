@@ -5,6 +5,35 @@ import UserNotifications
 
 @MainActor
 struct NotificationServiceTests {
+    @Test(arguments: [UNAuthorizationStatus.authorized, .provisional, .denied])
+    func existingPermissionDoesNotPromptAgain(status: UNAuthorizationStatus) async throws {
+        let tracker = NotificationTracker()
+        let service = NotificationService(
+            authorizationRequester: {
+                await tracker.markAuthorizationRequested()
+                return true
+            },
+            authorizationStatusProvider: { status },
+            requestDeliverer: { _ in }
+        )
+
+        #expect(await service.authorizationStatus() == status)
+        #expect(try await service.requestAuthorizationIfNeeded() == (status != .denied))
+        #expect(await tracker.authorizationRequestCount == 0)
+    }
+
+    @Test
+    func permissionRequestErrorsArePropagated() async {
+        let service = NotificationService(
+            authorizationRequester: { throw URLError(.notConnectedToInternet) },
+            authorizationStatusProvider: { .notDetermined },
+            requestDeliverer: { _ in }
+        )
+        await #expect(throws: URLError.self) {
+            try await service.requestAuthorizationIfNeeded()
+        }
+    }
+
     @Test
     func balancePreferenceUpdatesDoNotSendNotificationsOrRepeatLowCreditAlerts() async throws {
         let tracker = NotificationTracker()
@@ -128,7 +157,7 @@ struct NotificationServiceTests {
     }
 
     @Test
-    func enablingNotificationsRequestsPermission() async {
+    func enablingNotificationsRequestsPermission() async throws {
         let tracker = NotificationTracker()
         let service = NotificationService(
             authorizationRequester: {
@@ -141,7 +170,7 @@ struct NotificationServiceTests {
             requestDeliverer: { _ in }
         )
 
-        let granted = await service.requestAuthorizationIfNeeded()
+        let granted = try await service.requestAuthorizationIfNeeded()
 
         #expect(granted)
         #expect(await tracker.authorizationRequestCount == 1)
