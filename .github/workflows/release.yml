@@ -9,11 +9,16 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Build and release
     runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - arch: arm64
@@ -59,7 +64,62 @@ jobs:
           echo "number=${build_number}" >> "${GITHUB_OUTPUT}"
           echo "Build number: ${build_number}"
 
-      - name: Build ${{ matrix.display_name }} app
+      - name: Prepare signing and notarization
+        env:
+          MACOS_SIGNING_CERTIFICATE: ${{ secrets.MACOS_SIGNING_CERTIFICATE }}
+          MACOS_SIGNING_PASSWORD: ${{ secrets.MACOS_SIGNING_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          for name in MACOS_SIGNING_CERTIFICATE MACOS_SIGNING_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [[ -z "${!name}" ]]; then
+              echo "Required secret ${name} is not configured." >&2
+              exit 1
+            fi
+          done
+
+          certificate_path="${RUNNER_TEMP}/signing-certificate.p12"
+          keychain_path="${RUNNER_TEMP}/signing.keychain-db"
+          keychain_password="$(openssl rand -hex 32)"
+          echo "::add-mask::${keychain_password}"
+
+          printf '%s' "${MACOS_SIGNING_CERTIFICATE}" | base64 --decode > "${certificate_path}"
+          security create-keychain -p "${keychain_password}" "${keychain_path}"
+          security set-keychain-settings -lut 21600 "${keychain_path}"
+          security unlock-keychain -p "${keychain_password}" "${keychain_path}"
+          security import "${certificate_path}" -P "${MACOS_SIGNING_PASSWORD}" \
+            -A -t cert -f pkcs12 -k "${keychain_path}"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "${keychain_password}" "${keychain_path}" > /dev/null
+          security list-keychains -d user -s "${keychain_path}" "${HOME}/Library/Keychains/login.keychain-db"
+          rm -f "${certificate_path}"
+
+          identity="$(security find-identity -v -p codesigning "${keychain_path}" \
+            | awk -v team="(${APPLE_TEAM_ID})" '/"Developer ID Application:/ && index($0, team) {print $2; exit}')"
+          if [[ -z "${identity}" ]]; then
+            echo "No valid Developer ID Application identity matches APPLE_TEAM_ID." >&2
+            exit 1
+          fi
+          echo "SIGNING_IDENTITY=${identity}" >> "${GITHUB_ENV}"
+
+          xcrun notarytool store-credentials CodexMeter \
+            --apple-id "${APPLE_ID}" \
+            --password "${APPLE_PASSWORD}" \
+            --team-id "${APPLE_TEAM_ID}" \
+            --keychain "${keychain_path}"
+
+          /usr/libexec/PlistBuddy -c 'Add :method string developer-id' "${RUNNER_TEMP}/ExportOptions.plist"
+          /usr/libexec/PlistBuddy -c 'Add :signingStyle string manual' "${RUNNER_TEMP}/ExportOptions.plist"
+          /usr/libexec/PlistBuddy -c "Add :signingCertificate string ${identity}" "${RUNNER_TEMP}/ExportOptions.plist"
+          /usr/libexec/PlistBuddy -c "Add :teamID string ${APPLE_TEAM_ID}" "${RUNNER_TEMP}/ExportOptions.plist"
+
+      - name: Archive and export ${{ matrix.display_name }} app
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
 
@@ -67,23 +127,39 @@ jobs:
             -project CodexMeter.xcodeproj \
             -scheme CodexMeter \
             -configuration Release \
+            -destination 'generic/platform=macOS' \
             -derivedDataPath "${RUNNER_TEMP}/DerivedData-${{ matrix.arch }}" \
+            -archivePath "${RUNNER_TEMP}/CodexMeter.xcarchive" \
+            -hideShellScriptEnvironment \
             ARCHS="${{ matrix.arch }}" \
             ONLY_ACTIVE_ARCH=NO \
             CURRENT_PROJECT_VERSION="${{ steps.build.outputs.number }}" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            build
+            MARKETING_VERSION="${{ steps.version.outputs.version }}" \
+            DEVELOPMENT_TEAM="${APPLE_TEAM_ID}" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="${SIGNING_IDENTITY}" \
+            ENABLE_HARDENED_RUNTIME=YES \
+            OTHER_CODE_SIGN_FLAGS="--timestamp" \
+            archive
+
+          xcodebuild -exportArchive \
+            -archivePath "${RUNNER_TEMP}/CodexMeter.xcarchive" \
+            -exportOptionsPlist "${RUNNER_TEMP}/ExportOptions.plist" \
+            -exportPath "${RUNNER_TEMP}/export"
 
       - name: Verify ${{ matrix.display_name }} app bundle
         run: |
           set -euo pipefail
 
-          app_path="${RUNNER_TEMP}/DerivedData-${{ matrix.arch }}/Build/Products/Release/CodexMeter.app"
+          app_path="${RUNNER_TEMP}/export/CodexMeter.app"
           executable_path="${app_path}/Contents/MacOS/CodexMeter"
           icon_path="${app_path}/Contents/Resources/AppIcon.icns"
           info_plist="${app_path}/Contents/Info.plist"
+
+          codesign --verify --deep --strict --verbose=2 "${app_path}"
+          codesign --verify --strict \
+            -R='anchor apple generic and certificate leaf[field.1.2.840.113635.100.6.1.13] exists' \
+            "${app_path}"
 
           if [[ ! -d "${app_path}" ]]; then
             echo "Built app was not found at ${app_path}." >&2
@@ -118,13 +194,25 @@ jobs:
             exit 1
           fi
 
+      - name: Notarize and staple ${{ matrix.display_name }} app
+        run: |
+          set -euo pipefail
+
+          app_path="${RUNNER_TEMP}/export/CodexMeter.app"
+          zip_path="${RUNNER_TEMP}/CodexMeter-notarization.zip"
+          ditto -c -k --sequesterRsrc --keepParent "${app_path}" "${zip_path}"
+          bash .github/scripts/notarize.sh "${zip_path}" app
+          xcrun stapler staple "${app_path}"
+          xcrun stapler validate "${app_path}"
+          spctl --assess --type execute --verbose=2 "${app_path}"
+
       - name: Create ${{ matrix.display_name }} DMG
         id: dmg
         run: |
           set -euo pipefail
 
           tag="${{ steps.version.outputs.tag }}"
-          app_path="${RUNNER_TEMP}/DerivedData-${{ matrix.arch }}/Build/Products/Release/CodexMeter.app"
+          app_path="${RUNNER_TEMP}/export/CodexMeter.app"
           staging_dir="${RUNNER_TEMP}/CodexMeter-${{ matrix.arch }}-dmg"
           dmg_path="${RUNNER_TEMP}/CodexMeter-${tag}-${{ matrix.arch }}.dmg"
 
@@ -135,7 +223,7 @@ jobs:
 
           rm -rf "${staging_dir}"
           mkdir -p "${staging_dir}"
-          cp -R "${app_path}" "${staging_dir}/"
+          ditto "${app_path}" "${staging_dir}/CodexMeter.app"
           ln -s /Applications "${staging_dir}/Applications"
 
           hdiutil create \
@@ -148,24 +236,77 @@ jobs:
           echo "path=${dmg_path}" >> "${GITHUB_OUTPUT}"
           echo "name=CodexMeter-${tag}-${{ matrix.arch }}.dmg" >> "${GITHUB_OUTPUT}"
 
-      - name: Create GitHub release
+      - name: Sign, notarize, and staple ${{ matrix.display_name }} DMG
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DMG_PATH: ${{ steps.dmg.outputs.path }}
         run: |
           set -euo pipefail
 
-          gh release create "${{ steps.version.outputs.tag }}" \
-            "${{ steps.dmg.outputs.path }}#${{ steps.dmg.outputs.name }}" \
-            --title "CodexMeter ${{ steps.version.outputs.tag }}" \
-            --notes "CodexMeter ${{ steps.version.outputs.tag }}" \
-            --verify-tag \
-          || gh release upload "${{ steps.version.outputs.tag }}" \
-            "${{ steps.dmg.outputs.path }}#${{ steps.dmg.outputs.name }}" \
-            --clobber
+          codesign --force --timestamp --sign "${SIGNING_IDENTITY}" "${DMG_PATH}"
+          codesign --verify --strict --verbose=2 "${DMG_PATH}"
+          bash .github/scripts/notarize.sh "${DMG_PATH}" dmg
+          xcrun stapler staple "${DMG_PATH}"
+          xcrun stapler validate "${DMG_PATH}"
+          spctl --assess --type open --context context:primary-signature --verbose=2 "${DMG_PATH}"
+
+      - name: Upload verified DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.arch }}
+          path: ${{ steps.dmg.outputs.path }}
+          if-no-files-found: error
+
+      - name: Upload notarization diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: notarization-${{ matrix.arch }}
+          path: ${{ runner.temp }}/notarization-*.json
+          if-no-files-found: ignore
+
+      - name: Remove signing credentials
+        if: always()
+        run: |
+          security delete-keychain "${RUNNER_TEMP}/signing.keychain-db" || true
+          rm -f "${RUNNER_TEMP}/signing-certificate.p12"
+
+  publish:
+    name: Publish verified release
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download both DMGs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          assets=("release/CodexMeter-${TAG}-arm64.dmg" "release/CodexMeter-${TAG}-x86_64.dmg")
+          for asset in "${assets[@]}"; do
+            test -f "${asset}"
+          done
+
+          if gh release view "${TAG}" > /dev/null 2>&1; then
+            gh release upload "${TAG}" "${assets[@]}" --clobber
+          else
+            gh release create "${TAG}" "${assets[@]}" \
+              --title "CodexMeter ${TAG}" \
+              --notes "CodexMeter ${TAG}" \
+              --verify-tag
+          fi
 
   notify-tap:
     name: Notify Homebrew tap
-    needs: release
+    needs: publish
     runs-on: ubuntu-latest
     environment: homebrew-tap
 
