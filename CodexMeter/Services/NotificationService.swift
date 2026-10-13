@@ -21,7 +21,7 @@ actor NotificationService: NotificationScheduling {
 
     nonisolated private static let resetRemainingPercent = 99
 
-    private let authorizationRequester: @Sendable () async -> Bool
+    private let authorizationRequester: @Sendable () async throws -> Bool
     private let authorizationStatusProvider: @Sendable () async -> UNAuthorizationStatus
     private let requestDeliverer: @Sendable (UNNotificationRequest) async -> Void
     private var thresholdStateByMeter: [UsageMeterID: ThresholdNotificationState] = [:]
@@ -30,11 +30,7 @@ actor NotificationService: NotificationScheduling {
 
     init(center: UNUserNotificationCenter = .current()) {
         self.authorizationRequester = {
-            do {
-                return try await center.requestAuthorization(options: [.alert, .sound])
-            } catch {
-                return false
-            }
+            try await center.requestAuthorization(options: [.alert, .sound])
         }
 
         self.authorizationStatusProvider = {
@@ -47,7 +43,7 @@ actor NotificationService: NotificationScheduling {
     }
 
     init(
-        authorizationRequester: @escaping @Sendable () async -> Bool,
+        authorizationRequester: @escaping @Sendable () async throws -> Bool,
         authorizationStatusProvider: @escaping @Sendable () async -> UNAuthorizationStatus,
         requestDeliverer: @escaping @Sendable (UNNotificationRequest) async -> Void
     ) {
@@ -56,14 +52,18 @@ actor NotificationService: NotificationScheduling {
         self.requestDeliverer = requestDeliverer
     }
 
-    func requestAuthorizationIfNeeded() async -> Bool {
+    func authorizationStatus() async -> UNAuthorizationStatus {
+        await authorizationStatusProvider()
+    }
+
+    func requestAuthorizationIfNeeded() async throws -> Bool {
         let status = await authorizationStatusProvider()
 
         switch status {
         case .authorized, .provisional:
             return true
         case .notDetermined:
-            return await authorizationRequester()
+            return try await authorizationRequester()
         case .denied:
             return false
         @unknown default:
@@ -113,8 +113,12 @@ actor NotificationService: NotificationScheduling {
                 && (settings[meter.id] ?? MeterPreferences()).isVisible
         }
         let enabledIDs = Set(enabledMeters.map(\.id))
-        thresholdStateByMeter = thresholdStateByMeter.filter { enabledIDs.contains($0.key) }
-        resetStateByMeter = resetStateByMeter.filter { enabledIDs.contains($0.key) }
+        thresholdStateByMeter = thresholdStateByMeter.filter {
+            enabledIDs.contains($0.key) && settings[$0.key]?.notificationThreshold != nil
+        }
+        resetStateByMeter = resetStateByMeter.filter {
+            enabledIDs.contains($0.key) && settings[$0.key]?.resetNotificationsEnabled == true
+        }
         let amountEnabledIDs = Set(enabledMeters.filter { meter in
             let preferences = settings[meter.id] ?? MeterPreferences()
             return amountNotificationsEnabled(for: meter, preferences: preferences)
@@ -131,6 +135,8 @@ actor NotificationService: NotificationScheduling {
 
         let status = await authorizationStatusProvider()
         guard [.authorized, .provisional].contains(status) else {
+            thresholdStateByMeter.removeAll()
+            resetStateByMeter.removeAll()
             amountStateByMeter.removeAll()
             return
         }

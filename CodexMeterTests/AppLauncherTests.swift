@@ -4,6 +4,23 @@ import Testing
 
 @MainActor
 struct AppLauncherTests {
+    @Test(arguments: [true, false])
+    func opensNotificationSettingsAndReportsFailure(opened: Bool) async {
+        let tracker = LauncherRecorder()
+        let launcher = AppLauncher(
+            bundleIdentifierResolver: { _ in nil },
+            fallbackURLResolver: { nil },
+            urlOpener: { url in
+                tracker.recordURL(url)
+                return opened
+            },
+            applicationOpener: { _ in false }
+        )
+
+        #expect(await launcher.openNotificationSettings() == opened)
+        #expect(tracker.urls == [AppLauncher.notificationSettingsURL])
+    }
+
     @Test
     func opensDashboardURL() async {
         let tracker = LauncherRecorder()

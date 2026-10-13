@@ -103,15 +103,33 @@ final class LauncherRecorder: @unchecked Sendable {
 final class MockNotificationService: NotificationScheduling, @unchecked Sendable {
     private let lock = NSLock()
     private let underlying: NotificationScheduling?
+    private let authorizationRequester: @Sendable () async throws -> Bool
+    private var authorizationStatusValue: UNAuthorizationStatus
     private var authorizationRequestCountValue = 0
     private var evaluationCountValue = 0
+    private var lastEvaluationSettingsValue: [UsageMeterID: MeterPreferences] = [:]
+    private var lastAmountPreferencesValue: [UsageMeterID: MeterPreferences] = [:]
 
-    init(underlying: NotificationScheduling? = nil) {
+    init(
+        underlying: NotificationScheduling? = nil,
+        status: UNAuthorizationStatus = .authorized,
+        authorizationRequester: @escaping @Sendable () async throws -> Bool = { true }
+    ) {
         self.underlying = underlying
+        self.authorizationStatusValue = status
+        self.authorizationRequester = authorizationRequester
     }
 
     var evaluationCount: Int {
         lock.withLock { evaluationCountValue }
+    }
+
+    var lastEvaluationSettings: [UsageMeterID: MeterPreferences] {
+        lock.withLock { lastEvaluationSettingsValue }
+    }
+
+    var lastAmountPreferences: [UsageMeterID: MeterPreferences] {
+        lock.withLock { lastAmountPreferencesValue }
     }
 
     var authorizationRequestCount: Int {
@@ -120,11 +138,24 @@ final class MockNotificationService: NotificationScheduling, @unchecked Sendable
         }
     }
 
-    func requestAuthorizationIfNeeded() async -> Bool {
+    func authorizationStatus() async -> UNAuthorizationStatus {
+        if let underlying { return await underlying.authorizationStatus() }
+        return lock.withLock { authorizationStatusValue }
+    }
+
+    func setAuthorizationStatus(_ status: UNAuthorizationStatus) {
+        lock.withLock { authorizationStatusValue = status }
+    }
+
+    func requestAuthorizationIfNeeded() async throws -> Bool {
         lock.withLock {
             authorizationRequestCountValue += 1
         }
-        return await underlying?.requestAuthorizationIfNeeded() ?? true
+        if let underlying { return try await underlying.requestAuthorizationIfNeeded() }
+        if await authorizationStatus() == .denied { return false }
+        let granted = try await authorizationRequester()
+        setAuthorizationStatus(granted ? .authorized : .denied)
+        return granted
     }
 
     func updateAmountNotificationPreferences(
@@ -132,6 +163,7 @@ final class MockNotificationService: NotificationScheduling, @unchecked Sendable
         preferences: MeterPreferences
     ) async {
         await underlying?.updateAmountNotificationPreferences(for: meter, preferences: preferences)
+        lock.withLock { lastAmountPreferencesValue[meter.id] = preferences }
     }
 
     func evaluateNotifications(
@@ -139,13 +171,17 @@ final class MockNotificationService: NotificationScheduling, @unchecked Sendable
         settings: [UsageMeterID: MeterPreferences]
     ) async {
         await underlying?.evaluateNotifications(for: snapshot, settings: settings)
-        lock.withLock { evaluationCountValue += 1 }
+        lock.withLock {
+            lastEvaluationSettingsValue = settings
+            evaluationCountValue += 1
+        }
     }
 }
 
 struct MockAppLauncher: AppLaunching {
     func openUsageDashboard() async -> Bool { true }
     func openCodex() async -> Bool { true }
+    func openNotificationSettings() async -> Bool { true }
 }
 
 final class MockLoginItemService: LoginItemManaging, @unchecked Sendable {

@@ -1,4 +1,5 @@
 import Foundation
+import UserNotifications
 
 #if DEBUG
 enum PreviewSupport {
@@ -95,9 +96,11 @@ private struct PreviewUsageFetcher: UsageFetching {
 private struct PreviewAppLauncher: AppLaunching {
     func openUsageDashboard() async -> Bool { true }
     func openCodex() async -> Bool { true }
+    func openNotificationSettings() async -> Bool { true }
 }
 
 private struct PreviewNotificationService: NotificationScheduling {
+    func authorizationStatus() async -> UNAuthorizationStatus { .authorized }
     func requestAuthorizationIfNeeded() async -> Bool { true }
     func updateAmountNotificationPreferences(
         for meter: UsageMeterViewData,

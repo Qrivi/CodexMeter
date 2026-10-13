@@ -4,6 +4,7 @@ import Foundation
 struct AppLauncher: AppLaunching {
     static let usageDashboardURL = URL(string: "https://chatgpt.com/settings/usage?tab=overview")!
     static let codexURL = URL(string: "codex://")!
+    static let notificationSettingsURL = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!
     static let codexBundleIdentifier = "com.openai.codex"
     static let codexFallbackPath = "/Applications/Codex.app"
 
@@ -53,6 +54,10 @@ struct AppLauncher: AppLaunching {
 
     func openUsageDashboard() async -> Bool {
         await urlOpener(Self.usageDashboardURL)
+    }
+
+    func openNotificationSettings() async -> Bool {
+        await urlOpener(Self.notificationSettingsURL)
     }
 
     func openCodex() async -> Bool {

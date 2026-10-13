@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import Foundation
+import UserNotifications
 
 @MainActor
 final class UsageViewModel: ObservableObject {
@@ -15,6 +16,9 @@ final class UsageViewModel: ObservableObject {
     @Published private(set) var pollOnMenuOpen: Bool
     @Published private(set) var launchAtLoginEnabled: Bool
     @Published private(set) var settingsErrorMessage: String?
+    @Published private(set) var notificationAuthorizationStatus: UNAuthorizationStatus?
+    @Published private(set) var isRequestingNotificationAuthorization = false
+    @Published private(set) var notificationPermissionErrorMessage: String?
 
     private let usageService: UsageFetching
     private let preferencesStore: PreferencesStore
@@ -29,6 +33,9 @@ final class UsageViewModel: ObservableObject {
     private var pollingTask: Task<Void, Never>?
     private var wakeObserverTask: Task<Void, Never>?
     private var didStart = false
+    private var notificationAuthorizationTask: Task<Bool, Never>?
+    private var notificationAuthorizationRevision = 0
+    private var notificationPreferenceVersions: [AnyKeyPath: [UsageMeterID: Int]] = [:]
 
     internal private(set) var pollingScheduleVersion = 0
 
@@ -161,6 +168,7 @@ final class UsageViewModel: ObservableObject {
         }
 
         didStart = true
+        Task { await refreshNotificationAuthorization() }
         schedulePolling()
         observeWakeNotifications()
         requestRefresh()
@@ -237,6 +245,63 @@ final class UsageViewModel: ObservableObject {
         meterPreferences[meterID] ?? MeterPreferences()
     }
 
+    var notificationsAuthorized: Bool {
+        notificationAuthorizationStatus == .authorized || notificationAuthorizationStatus == .provisional
+    }
+
+    var notificationsBlocked: Bool {
+        notificationAuthorizationStatus != nil
+            && notificationAuthorizationStatus != .notDetermined
+            && !notificationsAuthorized
+    }
+
+    var canEditNotificationPreferences: Bool {
+        notificationAuthorizationStatus != nil && !notificationsBlocked && !isRequestingNotificationAuthorization
+    }
+
+    func notificationPreferences(for meterID: UsageMeterID) -> MeterPreferences {
+        var preferences = preferences(for: meterID)
+        guard notificationsAuthorized else {
+            preferences.notificationThreshold = nil
+            preferences.resetNotificationsEnabled = false
+            preferences.creditsNotificationThreshold = nil
+            preferences.creditsAddedNotificationsEnabled = false
+            preferences.resetsUsedNotificationsEnabled = false
+            preferences.resetsAddedNotificationsEnabled = false
+            return preferences
+        }
+        return preferences
+    }
+
+    func refreshNotificationAuthorization() async {
+        guard !isRequestingNotificationAuthorization else { return }
+        notificationAuthorizationRevision += 1
+        let revision = notificationAuthorizationRevision
+        let status = await notificationService.authorizationStatus()
+        guard revision == notificationAuthorizationRevision, !isRequestingNotificationAuthorization else { return }
+        applyNotificationAuthorizationStatus(status)
+        if notificationsAuthorized || notificationsBlocked {
+            notificationPermissionErrorMessage = nil
+        }
+    }
+
+    private func applyNotificationAuthorizationStatus(_ status: UNAuthorizationStatus) {
+        let wasAuthorized = notificationsAuthorized
+        notificationAuthorizationStatus = status
+        if wasAuthorized != notificationsAuthorized, let snapshot {
+            // Apply permission changes even if no usage poll occurs while permission is denied.
+            enqueueNotificationEvaluation(for: snapshot)
+        }
+    }
+
+    func openNotificationSettings() {
+        Task {
+            if await appLauncher.openNotificationSettings() == false {
+                notificationPermissionErrorMessage = "Could not open Notification Settings. Open System Settings → Notifications → CodexMeter."
+            }
+        }
+    }
+
     func visibleMeters(in snapshot: UsageSnapshot) -> [UsageMeterViewData] {
         snapshot.meters.filter { meter in
             meter.isAvailable && preferences(for: meter.id).isVisible
@@ -260,36 +325,15 @@ final class UsageViewModel: ObservableObject {
     }
 
     func selectNotificationThreshold(_ threshold: NotificationThreshold?, meterID: UsageMeterID) {
-        updatePreferences(for: meterID) { preferences in
-            preferences.notificationThreshold = threshold
-        }
-
-        Task {
-            if threshold != nil {
-                _ = await notificationService.requestAuthorizationIfNeeded()
-            }
-        }
+        setNotificationPreference(threshold, for: meterID, keyPath: \.notificationThreshold, requiresAuthorization: threshold != nil)
     }
 
     func setResetNotificationsEnabled(_ isEnabled: Bool, meterID: UsageMeterID) {
-        updatePreferences(for: meterID) { preferences in
-            preferences.resetNotificationsEnabled = isEnabled
-        }
-
-        guard isEnabled else {
-            return
-        }
-
-        Task {
-            _ = await notificationService.requestAuthorizationIfNeeded()
-        }
+        setNotificationPreference(isEnabled, for: meterID, keyPath: \.resetNotificationsEnabled, requiresAuthorization: isEnabled)
     }
 
     func selectCreditsNotificationThreshold(_ threshold: CreditsNotificationThreshold?) {
-        updatePreferences(for: .credits) { $0.creditsNotificationThreshold = threshold }
-        if threshold != nil {
-            Task { _ = await notificationService.requestAuthorizationIfNeeded() }
-        }
+        setNotificationPreference(threshold, for: .credits, keyPath: \.creditsNotificationThreshold, requiresAuthorization: threshold != nil)
     }
 
     func setNotificationEnabled(
@@ -297,10 +341,57 @@ final class UsageViewModel: ObservableObject {
         meterID: UsageMeterID,
         preference: WritableKeyPath<MeterPreferences, Bool>
     ) {
-        updatePreferences(for: meterID) { $0[keyPath: preference] = isEnabled }
-        if isEnabled {
-            Task { _ = await notificationService.requestAuthorizationIfNeeded() }
+        setNotificationPreference(isEnabled, for: meterID, keyPath: preference, requiresAuthorization: isEnabled)
+    }
+
+    private func setNotificationPreference<Value>(
+        _ value: Value,
+        for meterID: UsageMeterID,
+        keyPath: WritableKeyPath<MeterPreferences, Value>,
+        requiresAuthorization: Bool
+    ) {
+        let version = (notificationPreferenceVersions[keyPath]?[meterID] ?? 0) + 1
+        notificationPreferenceVersions[keyPath, default: [:]][meterID] = version
+        guard requiresAuthorization && !notificationsAuthorized else {
+            updatePreferences(for: meterID) { $0[keyPath: keyPath] = value }
+            return
         }
+        guard !notificationsBlocked else { return }
+
+        Task {
+            guard await authorizeNotifications(),
+                  notificationPreferenceVersions[keyPath]?[meterID] == version else { return }
+            updatePreferences(for: meterID) { $0[keyPath: keyPath] = value }
+        }
+    }
+
+    private func authorizeNotifications() async -> Bool {
+        if let notificationAuthorizationTask {
+            return await notificationAuthorizationTask.value
+        }
+
+        isRequestingNotificationAuthorization = true
+        notificationPermissionErrorMessage = nil
+        notificationAuthorizationRevision += 1
+        let task = Task {
+            do {
+                let granted = try await notificationService.requestAuthorizationIfNeeded()
+                applyNotificationAuthorizationStatus(await notificationService.authorizationStatus())
+                return granted && notificationsAuthorized
+            } catch {
+                applyNotificationAuthorizationStatus(await notificationService.authorizationStatus())
+                // macOS can report denial as an error; the blocked notice already explains how to resolve it.
+                notificationPermissionErrorMessage = notificationsBlocked
+                    ? nil
+                    : "Could not request notification permission. \(error.localizedDescription)"
+                return false
+            }
+        }
+        notificationAuthorizationTask = task
+        let granted = await task.value
+        notificationAuthorizationTask = nil
+        isRequestingNotificationAuthorization = false
+        return granted
     }
 
     func openUsageDashboard() {
@@ -338,7 +429,7 @@ final class UsageViewModel: ObservableObject {
             loadState = .loading
         }
 
-        refreshTask = Task.detached { [weak self, usageService, notificationService] in
+        refreshTask = Task.detached { [weak self, usageService] in
             do {
                 let freshSnapshot = try await usageService.fetchUsageSnapshot()
 
@@ -350,16 +441,7 @@ final class UsageViewModel: ObservableObject {
                     snapshot = freshSnapshot
                     loadState = .loaded
                     reconcileMenuBarDisplayMode(with: freshSnapshot)
-                    let settings = Dictionary(uniqueKeysWithValues: freshSnapshot.meters.map { meter in
-                        (meter.id, self.preferences(for: meter.id))
-                    })
-                    let previousTask = notificationTask
-                    let task = Task {
-                        await previousTask?.value
-                        await notificationService.evaluateNotifications(for: freshSnapshot, settings: settings)
-                    }
-                    notificationTask = task
-                    return task
+                    return enqueueNotificationEvaluation(for: freshSnapshot)
                 }
 
                 await evaluationTask?.value
@@ -378,6 +460,20 @@ final class UsageViewModel: ObservableObject {
                 self?.refreshTask = nil
             }
         }
+    }
+
+    @discardableResult
+    private func enqueueNotificationEvaluation(for snapshot: UsageSnapshot) -> Task<Void, Never> {
+        let settings = Dictionary(uniqueKeysWithValues: snapshot.meters.map { meter in
+            (meter.id, notificationPreferences(for: meter.id))
+        })
+        let previousTask = notificationTask
+        let task = Task { [notificationService] in
+            await previousTask?.value
+            await notificationService.evaluateNotifications(for: snapshot, settings: settings)
+        }
+        notificationTask = task
+        return task
     }
 
     private func handleRefreshFailure(_ error: UsageServiceError) {
@@ -422,10 +518,11 @@ final class UsageViewModel: ObservableObject {
         }
 
         // Apply preference changes in order before evaluating the next fetched balance.
+        let effectivePreferences = notificationPreferences(for: meterID)
         let previousTask = notificationTask
         notificationTask = Task { [notificationService] in
             await previousTask?.value
-            await notificationService.updateAmountNotificationPreferences(for: meter, preferences: preferences)
+            await notificationService.updateAmountNotificationPreferences(for: meter, preferences: effectivePreferences)
         }
     }
 

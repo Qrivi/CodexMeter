@@ -1,9 +1,257 @@
 import Foundation
 import Testing
+import UserNotifications
 @testable import CodexMeter
 
 @MainActor
 struct UsageViewModelTests {
+    @Test(arguments: [UNAuthorizationStatus.authorized, .provisional])
+    func authorizedPreferenceChangesAreSynchronous(status: UNAuthorizationStatus) async {
+        let notifications = MockNotificationService(status: status)
+        let viewModel = makeViewModel(service: MockUsageFetcher(results: []), notificationService: notifications)
+        await viewModel.refreshNotificationAuthorization()
+
+        viewModel.selectNotificationThreshold(.twenty, meterID: .primary)
+        viewModel.setResetNotificationsEnabled(true, meterID: .primary)
+        viewModel.selectCreditsNotificationThreshold(.ten)
+        viewModel.setNotificationEnabled(true, meterID: .credits, preference: \.creditsAddedNotificationsEnabled)
+        viewModel.setNotificationEnabled(true, meterID: .usageLimitResets, preference: \.resetsUsedNotificationsEnabled)
+        viewModel.setNotificationEnabled(true, meterID: .usageLimitResets, preference: \.resetsAddedNotificationsEnabled)
+
+        #expect(viewModel.preferences(for: .primary) == MeterPreferences(notificationThreshold: .twenty, resetNotificationsEnabled: true))
+        #expect(viewModel.preferences(for: .credits) == MeterPreferences(creditsNotificationThreshold: .ten, creditsAddedNotificationsEnabled: true))
+        #expect(viewModel.preferences(for: .usageLimitResets) == MeterPreferences(resetsUsedNotificationsEnabled: true, resetsAddedNotificationsEnabled: true))
+        #expect(viewModel.canEditNotificationPreferences)
+        #expect(!viewModel.isRequestingNotificationAuthorization)
+        #expect(notifications.authorizationRequestCount == 0)
+    }
+
+    @Test
+    func deniedPermissionMasksEvaluationAndAmountPreferenceUpdates() async throws {
+        let defaults = UserDefaults(suiteName: #function)!
+        defer { defaults.removePersistentDomain(forName: #function) }
+        let store = PreferencesStore(userDefaults: defaults)
+        let saved: [UsageMeterID: MeterPreferences] = [
+            .primary: MeterPreferences(notificationThreshold: .twenty, resetNotificationsEnabled: true),
+            .credits: MeterPreferences(creditsNotificationThreshold: .ten, creditsAddedNotificationsEnabled: true)
+        ]
+        store.meterPreferences = saved
+        let notifications = MockNotificationService(status: .denied)
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(makeSnapshot())]),
+            preferencesStore: store, notificationService: notifications
+        )
+        await viewModel.refreshNotificationAuthorization()
+        viewModel.refreshNow()
+        try await waitUntil { notifications.evaluationCount == 1 }
+        #expect(notifications.lastEvaluationSettings[.primary] == MeterPreferences())
+        #expect(notifications.lastEvaluationSettings[.credits] == MeterPreferences())
+
+        viewModel.setMeterVisible(true, meterID: .credits)
+        try await waitUntil { notifications.lastAmountPreferences[.credits] != nil }
+        #expect(notifications.lastAmountPreferences[.credits] == MeterPreferences())
+        #expect(store.meterPreferences == saved)
+    }
+
+    @Test
+    func permissionLossWithoutAPollRearmsRateLimitAndCreditAlerts() async throws {
+        let defaults = UserDefaults(suiteName: #function)!
+        defer { defaults.removePersistentDomain(forName: #function) }
+        let store = PreferencesStore(userDefaults: defaults)
+        store.meterPreferences = [
+            .primary: MeterPreferences(notificationThreshold: .twenty),
+            .credits: MeterPreferences(creditsNotificationThreshold: .ten)
+        ]
+        let permission = MockNotificationService()
+        let tracker = NotificationTracker()
+        let service = NotificationService(
+            authorizationRequester: { true },
+            authorizationStatusProvider: { await permission.authorizationStatus() },
+            requestDeliverer: { request in await tracker.record(request: request) }
+        )
+        let notifications = MockNotificationService(underlying: service)
+        let lowCredits = UsageFormatting.snapshot(from: UsageResponse(
+            planType: nil, rateLimit: nil, additionalRateLimits: nil,
+            credits: CreditsInfo(unlimited: false, balance: .int(9), hasCredits: true)
+        ))
+        let snapshot = UsageSnapshot(
+            meters: makeSnapshot(fiveHourRemaining: 10).meters.filter { $0.kind == .rateLimit }
+                + lowCredits.meters.filter { $0.kind == .credits },
+            lastUpdated: lowCredits.lastUpdated, warningMessage: nil
+        )
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: [.success(snapshot), .success(snapshot)]),
+            preferencesStore: store, notificationService: notifications
+        )
+        await viewModel.refreshNotificationAuthorization()
+        viewModel.refreshNow()
+        try await waitUntil { notifications.evaluationCount == 1 }
+        #expect(await tracker.identifiers.count == 2)
+        permission.setAuthorizationStatus(.denied)
+        await viewModel.refreshNotificationAuthorization()
+        try await waitUntil { notifications.evaluationCount == 2 }
+        #expect(await tracker.identifiers.count == 2)
+        permission.setAuthorizationStatus(.authorized)
+        await viewModel.refreshNotificationAuthorization()
+        try await waitUntil { notifications.evaluationCount == 3 }
+        #expect(await tracker.identifiers.count == 4)
+        viewModel.refreshNow()
+        try await waitUntil { notifications.evaluationCount == 4 }
+        #expect(await tracker.identifiers.count == 4)
+    }
+
+    @Test
+    func notificationPermissionRefreshNeverPrompts() async {
+        let notifications = MockNotificationService(status: .notDetermined)
+        let viewModel = makeViewModel(service: MockUsageFetcher(results: []), notificationService: notifications)
+
+        #expect(!viewModel.canEditNotificationPreferences)
+        await viewModel.refreshNotificationAuthorization()
+
+        #expect(viewModel.notificationAuthorizationStatus == .notDetermined)
+        #expect(viewModel.canEditNotificationPreferences)
+        #expect(notifications.authorizationRequestCount == 0)
+    }
+
+    @Test
+    func notificationChoicesStayOffUntilPermissionIsGranted() async throws {
+        let tracker = RefreshTracker()
+        let notifications = MockNotificationService(status: .notDetermined, authorizationRequester: {
+            await tracker.recordCallAndWaitUntilResumed()
+            return true
+        })
+        let viewModel = makeViewModel(service: MockUsageFetcher(results: []), notificationService: notifications)
+        await viewModel.refreshNotificationAuthorization()
+        viewModel.setResetNotificationsEnabled(true, meterID: .primary)
+        await tracker.waitUntilCalled()
+
+        #expect(viewModel.isRequestingNotificationAuthorization)
+        #expect(!viewModel.canEditNotificationPreferences)
+        #expect(!viewModel.preferences(for: .primary).resetNotificationsEnabled)
+        #expect(!viewModel.notificationPreferences(for: .primary).resetNotificationsEnabled)
+
+        await tracker.resume()
+        try await waitUntil { viewModel.preferences(for: .primary).resetNotificationsEnabled }
+        #expect(viewModel.notificationPreferences(for: .primary).resetNotificationsEnabled)
+        #expect(viewModel.canEditNotificationPreferences)
+    }
+
+    @Test
+    func deniedPermissionDoesNotSaveRequestedNotificationChoices() async throws {
+        let notifications = MockNotificationService(status: .notDetermined, authorizationRequester: { false })
+        let viewModel = makeViewModel(service: MockUsageFetcher(results: []), notificationService: notifications)
+
+        viewModel.selectNotificationThreshold(.twenty, meterID: .primary)
+        viewModel.setResetNotificationsEnabled(true, meterID: .primary)
+        viewModel.selectCreditsNotificationThreshold(.ten)
+        viewModel.setNotificationEnabled(true, meterID: .credits, preference: \.creditsAddedNotificationsEnabled)
+        viewModel.setNotificationEnabled(true, meterID: .usageLimitResets, preference: \.resetsUsedNotificationsEnabled)
+        viewModel.setNotificationEnabled(true, meterID: .usageLimitResets, preference: \.resetsAddedNotificationsEnabled)
+        try await waitUntil { viewModel.notificationsBlocked && !viewModel.isRequestingNotificationAuthorization }
+
+        #expect(!viewModel.canEditNotificationPreferences)
+        #expect(viewModel.preferences(for: .primary) == MeterPreferences())
+        #expect(viewModel.preferences(for: .credits) == MeterPreferences())
+        #expect(viewModel.preferences(for: .usageLimitResets) == MeterPreferences())
+        #expect(notifications.authorizationRequestCount == 1)
+    }
+
+    @Test
+    func externalPermissionChangesMaskAndRestoreAllSavedNotificationChoices() async {
+        let defaults = UserDefaults(suiteName: #function)!
+        defer { defaults.removePersistentDomain(forName: #function) }
+        let store = PreferencesStore(userDefaults: defaults)
+        let saved: [UsageMeterID: MeterPreferences] = [
+            .primary: MeterPreferences(notificationThreshold: .twenty, resetNotificationsEnabled: true),
+            .credits: MeterPreferences(creditsNotificationThreshold: .ten, creditsAddedNotificationsEnabled: true),
+            .usageLimitResets: MeterPreferences(resetsUsedNotificationsEnabled: true, resetsAddedNotificationsEnabled: true)
+        ]
+        store.meterPreferences = saved
+        let notifications = MockNotificationService()
+        let viewModel = makeViewModel(
+            service: MockUsageFetcher(results: []), preferencesStore: store, notificationService: notifications
+        )
+
+        await viewModel.refreshNotificationAuthorization()
+        for (meterID, preferences) in saved {
+            #expect(viewModel.notificationPreferences(for: meterID) == preferences)
+        }
+
+        notifications.setAuthorizationStatus(.denied)
+        await viewModel.refreshNotificationAuthorization()
+        #expect(viewModel.notificationsBlocked)
+        #expect(!viewModel.canEditNotificationPreferences)
+        for meterID in saved.keys {
+            #expect(viewModel.notificationPreferences(for: meterID) == MeterPreferences())
+        }
+        #expect(store.meterPreferences == saved)
+
+        notifications.setAuthorizationStatus(.authorized)
+        await viewModel.refreshNotificationAuthorization()
+        #expect(viewModel.canEditNotificationPreferences)
+        for (meterID, preferences) in saved {
+            #expect(viewModel.notificationPreferences(for: meterID) == preferences)
+        }
+        #expect(store.meterPreferences == saved)
+        #expect(notifications.authorizationRequestCount == 0)
+    }
+
+    @Test
+    func failedPermissionRequestShowsAnErrorAndCanBeRetried() async throws {
+        let notifications = MockNotificationService(status: .notDetermined, authorizationRequester: {
+            throw NSError(domain: "NotificationTest", code: 1, userInfo: [NSLocalizedDescriptionKey: "Service unavailable."])
+        })
+        let viewModel = makeViewModel(service: MockUsageFetcher(results: []), notificationService: notifications)
+        viewModel.setResetNotificationsEnabled(true, meterID: .primary)
+        try await waitUntil { viewModel.notificationPermissionErrorMessage != nil && !viewModel.isRequestingNotificationAuthorization }
+
+        #expect(viewModel.notificationPermissionErrorMessage == "Could not request notification permission. Service unavailable.")
+        #expect(!viewModel.preferences(for: .primary).resetNotificationsEnabled)
+        #expect(viewModel.canEditNotificationPreferences)
+        notifications.setAuthorizationStatus(.authorized)
+        await viewModel.refreshNotificationAuthorization()
+        #expect(viewModel.notificationPermissionErrorMessage == nil)
+    }
+
+    @Test
+    func disablingAPreferenceWhilePermissionIsPendingCancelsThatChoice() async throws {
+        let tracker = RefreshTracker()
+        let notifications = MockNotificationService(status: .notDetermined, authorizationRequester: {
+            await tracker.recordCallAndWaitUntilResumed()
+            return true
+        })
+        let viewModel = makeViewModel(service: MockUsageFetcher(results: []), notificationService: notifications)
+        viewModel.setResetNotificationsEnabled(true, meterID: .primary)
+        await tracker.waitUntilCalled()
+        viewModel.setResetNotificationsEnabled(false, meterID: .primary)
+        await tracker.resume()
+        try await waitUntil { !viewModel.isRequestingNotificationAuthorization }
+
+        #expect(!viewModel.preferences(for: .primary).resetNotificationsEnabled)
+    }
+
+    @Test
+    func denialReportedAsAnErrorUsesOnlyTheBlockedNotice() async throws {
+        let notifications = MockNotificationService(status: .notDetermined)
+        let service = NotificationService(
+            authorizationRequester: {
+                notifications.setAuthorizationStatus(.denied)
+                throw NSError(domain: "NotificationTest", code: 1, userInfo: [
+                    NSLocalizedDescriptionKey: "Notifications are not allowed for this application"
+                ])
+            },
+            authorizationStatusProvider: { await notifications.authorizationStatus() },
+            requestDeliverer: { _ in }
+        )
+        let viewModel = makeViewModel(service: MockUsageFetcher(results: []), notificationService: service)
+        viewModel.setResetNotificationsEnabled(true, meterID: .primary)
+        try await waitUntil { viewModel.notificationsBlocked && !viewModel.isRequestingNotificationAuthorization }
+
+        #expect(viewModel.notificationPermissionErrorMessage == nil)
+        #expect(!viewModel.preferences(for: .primary).resetNotificationsEnabled)
+        #expect(!viewModel.canEditNotificationPreferences)
+    }
+
     @Test(arguments: [
         (UsageMeterID.credits, true),
         (.usageLimitResets, true),
@@ -26,12 +274,14 @@ struct UsageViewModelTests {
             service: MockUsageFetcher(results: [.success(updated)]),
             notificationService: notifications
         )
+        await viewModel.refreshNotificationAuthorization()
         viewModel.applyPreviewSnapshot(initial)
 
         let preference: WritableKeyPath<MeterPreferences, Bool> = meterID == .credits
             ? \.creditsAddedNotificationsEnabled
             : increases ? \.resetsAddedNotificationsEnabled : \.resetsUsedNotificationsEnabled
         viewModel.setNotificationEnabled(true, meterID: meterID, preference: preference)
+        #expect(viewModel.preferences(for: meterID)[keyPath: preference])
         viewModel.refreshNow()
         try await waitUntil { notifications.evaluationCount == 1 }
 
@@ -48,7 +298,7 @@ struct UsageViewModelTests {
         let defaults = UserDefaults(suiteName: #function)!
         defer { defaults.removePersistentDomain(forName: #function) }
         let store = PreferencesStore(userDefaults: defaults)
-        let notifications = MockNotificationService()
+        let notifications = MockNotificationService(status: .notDetermined)
         let viewModel = makeViewModel(
             service: MockUsageFetcher(results: []),
             preferencesStore: store,
@@ -58,14 +308,20 @@ struct UsageViewModelTests {
         viewModel.setNotificationEnabled(true, meterID: .credits, preference: \.creditsAddedNotificationsEnabled)
         viewModel.setNotificationEnabled(true, meterID: .usageLimitResets, preference: \.resetsUsedNotificationsEnabled)
         viewModel.setNotificationEnabled(true, meterID: .usageLimitResets, preference: \.resetsAddedNotificationsEnabled)
-        try await waitUntil { notifications.authorizationRequestCount == 4 }
+        try await waitUntil {
+            viewModel.preferences(for: .credits).creditsAddedNotificationsEnabled
+                && viewModel.preferences(for: .usageLimitResets).resetsUsedNotificationsEnabled
+                && viewModel.preferences(for: .usageLimitResets).resetsAddedNotificationsEnabled
+                && viewModel.preferences(for: .credits).creditsNotificationThreshold == .fifty
+        }
+        #expect(notifications.authorizationRequestCount == 1)
         #expect(store.meterPreferences[.credits] == MeterPreferences(creditsNotificationThreshold: .fifty, creditsAddedNotificationsEnabled: true))
         #expect(store.meterPreferences[.usageLimitResets] == MeterPreferences(resetsUsedNotificationsEnabled: true, resetsAddedNotificationsEnabled: true))
 
         viewModel.selectCreditsNotificationThreshold(nil)
         viewModel.setNotificationEnabled(false, meterID: .credits, preference: \.creditsAddedNotificationsEnabled)
         #expect(store.meterPreferences[.credits] == MeterPreferences())
-        #expect(notifications.authorizationRequestCount == 4)
+        #expect(notifications.authorizationRequestCount == 1)
     }
 
     @Test
@@ -156,8 +412,13 @@ struct UsageViewModelTests {
 
         viewModel.refreshNow()
         try await waitUntil { viewModel.loadState == .loaded }
-        viewModel.refreshNow()
-        try await waitUntil { viewModel.snapshot?.warningMessage == "Offline" }
+        // Snapshot publication precedes completion of notification evaluation.
+        // Retry while the first refresh is still coalescing new requests.
+        try await waitUntil {
+            if viewModel.snapshot?.warningMessage == "Offline" { return true }
+            viewModel.refreshNow()
+            return false
+        }
 
         #expect(viewModel.snapshot?.meter(id: .primary)?.remainingPercent == initialSnapshot.meter(id: .primary)?.remainingPercent)
         #expect(viewModel.snapshot?.warningMessage == "Offline")
@@ -176,8 +437,11 @@ struct UsageViewModelTests {
 
         viewModel.refreshNow()
         try await waitUntil { viewModel.loadState == .loaded }
-        viewModel.refreshNow()
-        try await waitUntil { viewModel.snapshot?.warningMessage == "Auth token unavailable. Open Codex to refresh it." }
+        try await waitUntil {
+            if viewModel.snapshot?.warningMessage == "Auth token unavailable. Open Codex to refresh it." { return true }
+            viewModel.refreshNow()
+            return false
+        }
 
         #expect(viewModel.snapshot?.meter(id: .primary)?.remainingPercent == initialSnapshot.meter(id: .primary)?.remainingPercent)
         #expect(viewModel.snapshot?.warningMessage == "Auth token unavailable. Open Codex to refresh it.")
@@ -624,7 +888,7 @@ struct UsageViewModelTests {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
         let store = PreferencesStore(userDefaults: defaults)
-        let notificationService = MockNotificationService()
+        let notificationService = MockNotificationService(status: .notDetermined)
         let viewModel = makeViewModel(
             service: MockUsageFetcher(results: [.success(makeSnapshot())]),
             preferencesStore: store,
@@ -632,7 +896,8 @@ struct UsageViewModelTests {
         )
 
         viewModel.setResetNotificationsEnabled(true, meterID: .primary)
-        try await waitUntil { notificationService.authorizationRequestCount == 1 }
+        try await waitUntil { viewModel.preferences(for: .primary).resetNotificationsEnabled }
+        #expect(notificationService.authorizationRequestCount == 1)
 
         #expect(viewModel.preferences(for: .primary).resetNotificationsEnabled)
         #expect(store.meterPreferences[.primary]?.resetNotificationsEnabled == true)

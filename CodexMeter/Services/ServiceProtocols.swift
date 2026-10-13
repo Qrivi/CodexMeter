@@ -1,4 +1,5 @@
 import Foundation
+import UserNotifications
 
 struct AuthSession: Sendable {
     let accessToken: String
@@ -9,17 +10,19 @@ protocol TokenProviding: Sendable {
     func currentSession() async throws -> AuthSession
 }
 
-protocol UsageFetching: Sendable {
+nonisolated protocol UsageFetching: Sendable {
     func fetchUsageSnapshot() async throws -> UsageSnapshot
 }
 
 protocol AppLaunching: Sendable {
     func openUsageDashboard() async -> Bool
     func openCodex() async -> Bool
+    func openNotificationSettings() async -> Bool
 }
 
-protocol NotificationScheduling: Sendable {
-    func requestAuthorizationIfNeeded() async -> Bool
+nonisolated protocol NotificationScheduling: Sendable {
+    func authorizationStatus() async -> UNAuthorizationStatus
+    func requestAuthorizationIfNeeded() async throws -> Bool
     func updateAmountNotificationPreferences(
         for meter: UsageMeterViewData,
         preferences: MeterPreferences
