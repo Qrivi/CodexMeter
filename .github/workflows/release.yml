@@ -17,6 +17,9 @@ jobs:
   release:
     name: Build and release
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 150
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
     strategy:
       fail-fast: false
       matrix:
@@ -170,11 +173,6 @@ jobs:
           icon_path="${app_path}/Contents/Resources/AppIcon.icns"
           info_plist="${app_path}/Contents/Info.plist"
 
-          codesign --verify --deep --strict --verbose=2 "${app_path}"
-          codesign --verify --strict \
-            -R='anchor apple generic and certificate leaf[field.1.2.840.113635.100.6.1.13] exists' \
-            "${app_path}"
-
           if [[ ! -d "${app_path}" ]]; then
             echo "Built app was not found at ${app_path}." >&2
             exit 1
@@ -189,6 +187,11 @@ jobs:
             echo "Built app is missing ${executable_path}." >&2
             exit 1
           fi
+
+          codesign --verify --deep --strict --verbose=2 "${app_path}"
+          codesign --verify --strict \
+            -R='anchor apple generic and certificate leaf[field.1.2.840.113635.100.6.1.13] exists' \
+            "${app_path}"
 
           if ! lipo -archs "${executable_path}" | tr ' ' '\n' | grep -Fxq "${{ matrix.arch }}"; then
             echo "Built executable does not contain the ${{ matrix.arch }} architecture." >&2
@@ -312,7 +315,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ needs.release.outputs.tag }}
         run: |
           set -euo pipefail
 
@@ -332,7 +335,7 @@ jobs:
 
   notify-tap:
     name: Notify Homebrew tap
-    needs: publish
+    needs: [release, publish]
     runs-on: ubuntu-latest
     environment: homebrew-tap
 
@@ -340,7 +343,7 @@ jobs:
       - name: Dispatch tap update
         env:
           TAP_DISPATCH_TOKEN: ${{ secrets.TAP_DISPATCH_TOKEN }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ needs.release.outputs.tag }}
         run: |
           set -euo pipefail
 

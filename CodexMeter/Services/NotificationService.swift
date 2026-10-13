@@ -113,8 +113,12 @@ actor NotificationService: NotificationScheduling {
                 && (settings[meter.id] ?? MeterPreferences()).isVisible
         }
         let enabledIDs = Set(enabledMeters.map(\.id))
-        thresholdStateByMeter = thresholdStateByMeter.filter { enabledIDs.contains($0.key) }
-        resetStateByMeter = resetStateByMeter.filter { enabledIDs.contains($0.key) }
+        thresholdStateByMeter = thresholdStateByMeter.filter {
+            enabledIDs.contains($0.key) && settings[$0.key]?.notificationThreshold != nil
+        }
+        resetStateByMeter = resetStateByMeter.filter {
+            enabledIDs.contains($0.key) && settings[$0.key]?.resetNotificationsEnabled == true
+        }
         let amountEnabledIDs = Set(enabledMeters.filter { meter in
             let preferences = settings[meter.id] ?? MeterPreferences()
             return amountNotificationsEnabled(for: meter, preferences: preferences)
@@ -131,6 +135,8 @@ actor NotificationService: NotificationScheduling {
 
         let status = await authorizationStatusProvider()
         guard [.authorized, .provisional].contains(status) else {
+            thresholdStateByMeter.removeAll()
+            resetStateByMeter.removeAll()
             amountStateByMeter.removeAll()
             return
         }

@@ -107,6 +107,8 @@ final class MockNotificationService: NotificationScheduling, @unchecked Sendable
     private var authorizationStatusValue: UNAuthorizationStatus
     private var authorizationRequestCountValue = 0
     private var evaluationCountValue = 0
+    private var lastEvaluationSettingsValue: [UsageMeterID: MeterPreferences] = [:]
+    private var lastAmountPreferencesValue: [UsageMeterID: MeterPreferences] = [:]
 
     init(
         underlying: NotificationScheduling? = nil,
@@ -120,6 +122,14 @@ final class MockNotificationService: NotificationScheduling, @unchecked Sendable
 
     var evaluationCount: Int {
         lock.withLock { evaluationCountValue }
+    }
+
+    var lastEvaluationSettings: [UsageMeterID: MeterPreferences] {
+        lock.withLock { lastEvaluationSettingsValue }
+    }
+
+    var lastAmountPreferences: [UsageMeterID: MeterPreferences] {
+        lock.withLock { lastAmountPreferencesValue }
     }
 
     var authorizationRequestCount: Int {
@@ -153,6 +163,7 @@ final class MockNotificationService: NotificationScheduling, @unchecked Sendable
         preferences: MeterPreferences
     ) async {
         await underlying?.updateAmountNotificationPreferences(for: meter, preferences: preferences)
+        lock.withLock { lastAmountPreferencesValue[meter.id] = preferences }
     }
 
     func evaluateNotifications(
@@ -160,7 +171,10 @@ final class MockNotificationService: NotificationScheduling, @unchecked Sendable
         settings: [UsageMeterID: MeterPreferences]
     ) async {
         await underlying?.evaluateNotifications(for: snapshot, settings: settings)
-        lock.withLock { evaluationCountValue += 1 }
+        lock.withLock {
+            lastEvaluationSettingsValue = settings
+            evaluationCountValue += 1
+        }
     }
 }
 

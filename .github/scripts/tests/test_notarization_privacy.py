@@ -22,6 +22,8 @@ class NotarizationPrivacyTests(unittest.TestCase):
             stub = tools / "xcrun"
             stub.write_text("""#!/usr/bin/env python3
 import json, os, pathlib, sys
+with open(os.environ['TEST_CALLS'], 'a') as calls:
+    calls.write(sys.argv[2] + '\\n')
 sentinel = os.environ['TEST_SENTINEL']
 print(sentinel, file=sys.stderr)
 if sys.argv[2] == 'submit':
@@ -53,6 +55,7 @@ raise SystemExit('Unexpected mock command')
                 PATH=f"{tools}{os.pathsep}{os.environ['PATH']}",
                 RUNNER_TEMP=str(root),
                 TEST_SENTINEL=SENTINEL,
+                TEST_CALLS=str(root / "calls"),
                 TEST_ID=SUBMISSION_ID,
                 TEST_STATUS=status,
                 TEST_EXIT=str(command_exit),
@@ -65,6 +68,13 @@ raise SystemExit('Unexpected mock command')
                 env=env, capture_output=True, text=True, check=False,
             )
             self.assertNotIn(SENTINEL, result.stdout + result.stderr)
+            calls = (root / "calls").read_text().splitlines()
+            self.assertEqual(calls, ["submit"] if malformed or injected_fields else ["submit", "log"])
+            self.assertIn(result.returncode, (0, 1))
+            if result.returncode:
+                self.assertIn("Notarization did not complete with Accepted status.", result.stderr)
+            else:
+                self.assertEqual(result.stderr, "")
             self.assertEqual(list(root.glob("notarization-private.*")), [])
             summaries = list(root.glob("notarization-*.json"))
             self.assertEqual([path.name for path in summaries], ["notarization-app-summary.json"])
@@ -83,8 +93,10 @@ raise SystemExit('Unexpected mock command')
     def test_rejection_timeout_and_command_failure_remain_failures(self):
         for status, command_exit in [("Invalid", 0), ("Rejected", 0), ("In Progress", 0), ("Accepted", 1)]:
             with self.subTest(status=status, command_exit=command_exit):
-                code, _ = self.run_notarization(status=status, command_exit=command_exit)
-                self.assertNotEqual(code, 0)
+                code, summary = self.run_notarization(status=status, command_exit=command_exit)
+                self.assertEqual(code, 1)
+                self.assertEqual(summary["id"], SUBMISSION_ID)
+                self.assertEqual(summary["status"], status)
 
     def test_malformed_response_is_private_and_fails_closed(self):
         code, summary = self.run_notarization(malformed=True)
