@@ -43,7 +43,14 @@ Configure these GitHub Actions repository secrets:
 Never commit signing keys, certificate exports, or passwords. The workflow imports
 credentials into a temporary keychain and removes it even if a release fails.
 For notarization failures, inspect the `notarization-arm64` or `notarization-x86_64`
-workflow artifacts for Apple's submission results and available diagnostic logs.
+workflow artifacts for summaries containing only a validated submission ID, known
+status, issue severity, and numeric error codes. These summaries expire after seven
+days. Raw Apple responses, free-form messages, URLs, and tool errors are neither
+printed nor uploaded; they are removed when the notarization helper exits. Retrieve
+detailed logs privately from Apple with `notarytool log` and the submission ID.
+Signing credentials are removed before any artifact upload actions run.
+The release workflow runs mocked notarization privacy tests before loading secrets.
+These cover success, rejection, timeout, malformed responses, and failed log downloads.
 
 To rerun the release workflow manually, select the intended `v<version>` tag.
 The exported app version is taken from that tag.
