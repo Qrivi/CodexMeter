@@ -35,15 +35,18 @@ jobs:
       matrix:
         include:
           - arch: arm64
-            runner: macos-26
+            runner: xcode-27
+            sdk_major: 27
             display_name: Apple Silicon
           - arch: x86_64
+            # Xcode 27 runners are only available on Apple Silicon.
             runner: macos-26-intel
+            sdk_major: 26
             display_name: Intel
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -164,6 +167,8 @@ jobs:
             -exportPath "${RUNNER_TEMP}/export"
 
       - name: Verify ${{ matrix.display_name }} app bundle
+        env:
+          EXPECTED_SDK_MAJOR: ${{ matrix.sdk_major }}
         run: |
           set -euo pipefail
 
@@ -207,8 +212,8 @@ jobs:
           fi
 
           sdk_name="$(plutil -extract DTSDKName raw -o - "${info_plist}")"
-          if [[ "${sdk_name}" != macosx26* ]]; then
-            echo "Expected a macOS 26 SDK build, got ${sdk_name}." >&2
+          if [[ "${sdk_name}" != "macosx${EXPECTED_SDK_MAJOR}."* ]]; then
+            echo "Expected a macOS ${EXPECTED_SDK_MAJOR} SDK build, got ${sdk_name}." >&2
             exit 1
           fi
 
@@ -305,7 +310,7 @@ jobs:
           fi
 
       - name: Upload verified DMG
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.dry_run && 'test-release' || 'release' }}-${{ matrix.arch }}
           path: ${{ steps.dmg.outputs.path }}
@@ -313,7 +318,7 @@ jobs:
 
       - name: Upload safe notarization summaries
         if: ${{ always() && steps.cleanup_signing.outcome == 'success' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: notarization-${{ matrix.arch }}
           path: ${{ runner.temp }}/notarization-*-summary.json
@@ -321,7 +326,7 @@ jobs:
           retention-days: 7
 
       - name: Upload signed update feed
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.dry_run && 'test-appcast' || 'appcast' }}-${{ matrix.arch }}
           path: ${{ runner.temp }}/feeds/appcast-${{ matrix.arch }}.xml
@@ -336,7 +341,7 @@ jobs:
       contents: write
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -352,14 +357,14 @@ jobs:
             | python3 .github/scripts/check-release-order.py "${TAG}"
 
       - name: Download both DMGs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: release-*
           merge-multiple: true
           path: release
 
       - name: Download both update feeds
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: appcast-*
           merge-multiple: true
@@ -373,7 +378,7 @@ jobs:
         run: bash .github/scripts/release-assets.sh publish "${TAG}" release
 
       - name: Upload feeds for GitHub Pages
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: feeds
 
@@ -393,11 +398,11 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Deploy update feeds
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
   notify-tap:
     name: Notify Homebrew tap
