@@ -48,8 +48,12 @@ history and avoid tags from divergent branches; merge commits are supported.
 
 To retry a release, run the Release workflow on its `v<version>` tag with `dry_run`
 disabled. The latest release can be retried; older published versions are rejected
-to prevent rolling back the update feeds. Retries also replace the GitHub release
-description with the Markdown file from the release tag.
+to prevent rolling back the update feeds. Retries reuse any already-published DMGs
+and generate feeds from those exact bytes, preserving signatures in cached feeds
+and open update dialogs. Missing assets from a partial publication can be uploaded,
+but existing downloads are never replaced. Retries also replace the GitHub release
+description with the Markdown file from the release tag. Ship changed app bytes
+under a new version tag.
 
 For the first Sparkle release, add `auto_updates true` to the CodexMeter cask in
 `Qrivi/homebrew-tap`. Mention the one-time manual upgrade from 1.2.x in release notes.

@@ -267,6 +267,15 @@ jobs:
           xcrun stapler validate "${DMG_PATH}"
           spctl --assess --type open --context context:primary-signature --verbose=2 "${DMG_PATH}"
 
+      - name: Reuse published DMG on production retries
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.version.outputs.tag }}
+          DMG_PATH: ${{ steps.dmg.outputs.path }}
+        run: bash .github/scripts/release-assets.sh reuse "${TAG}" "${DMG_PATH}"
+
       - name: Sign and validate Sparkle feed
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
@@ -361,24 +370,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.release.outputs.tag }}
-        run: |
-          set -euo pipefail
-
-          notes_path=".github/release-notes/${TAG}.md"
-          assets=("release/CodexMeter-${TAG}-arm64.dmg" "release/CodexMeter-${TAG}-x86_64.dmg")
-          for asset in "${assets[@]}"; do
-            test -f "${asset}"
-          done
-
-          if gh release view "${TAG}" > /dev/null 2>&1; then
-            gh release upload "${TAG}" "${assets[@]}" --clobber
-            gh release edit "${TAG}" --notes-file "${notes_path}"
-          else
-            gh release create "${TAG}" "${assets[@]}" \
-              --title "CodexMeter ${TAG}" \
-              --notes-file "${notes_path}" \
-              --verify-tag
-          fi
+        run: bash .github/scripts/release-assets.sh publish "${TAG}" release
 
       - name: Upload feeds for GitHub Pages
         uses: actions/upload-pages-artifact@v3
