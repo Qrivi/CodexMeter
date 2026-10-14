@@ -197,6 +197,7 @@ struct UsageMenuView_Previews: PreviewProvider {
             .frame(width: 340)
             .previewDisplayName("Usage Section")
         }
+        .environmentObject(AppUpdater(startingUpdater: false))
     }
 }
 #endif

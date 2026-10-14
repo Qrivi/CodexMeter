@@ -20,6 +20,7 @@ final class CodexMeterUITestsLaunchTests: XCTestCase {
     @MainActor
     func testLaunch() throws {
         let app = XCUIApplication()
+        app.launchArguments.append("--disable-updater")
         app.launch()
 
         let attachment = XCTAttachment(screenshot: app.screenshot())

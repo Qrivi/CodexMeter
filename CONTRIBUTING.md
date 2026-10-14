@@ -39,6 +39,7 @@ Configure these GitHub Actions repository secrets:
 | `APPLE_ID` | Apple Account email for notarization |
 | `APPLE_PASSWORD` | Generated Apple app-specific password |
 | `APPLE_TEAM_ID` | Developer team ID matching the signing certificate |
+| `SPARKLE_PRIVATE_KEY` | Contents of the Sparkle private-key export for the public key embedded in the app |
 
 Never commit signing keys, certificate exports, or passwords. The workflow imports
 credentials into a temporary keychain and removes it even if a release fails.
@@ -49,9 +50,42 @@ days. Raw Apple responses, free-form messages, URLs, and tool errors are neither
 printed nor uploaded; they are removed when the notarization helper exits. Retrieve
 detailed logs privately from Apple with `notarytool log` and the submission ID.
 Signing credentials are removed before any artifact upload actions run.
-The release workflow runs mocked notarization privacy tests before loading secrets.
-These cover success, rejection, timeout, malformed responses, and failed log downloads.
+The release workflow runs mocked signing and privacy tests before loading secrets.
+These cover success, rejection, timeout, malformed responses, failed log downloads,
+unsigned feeds, incorrect release metadata, and accidental key output.
 
 To rerun the release workflow manually, select the intended `v<version>` tag.
 The exported app version is taken from that tag.
+
+## Sparkle setup
+
+The app uses Sparkle 2 through Swift Package Manager. Commit `Package.resolved`
+alongside dependency changes. The app owns one updater shared by the menu and
+settings; Sparkle manages its update schedule and preference persistence.
+
+`AppUpdater` selects the Apple Silicon or Intel feed for the running binary, including
+Intel builds running under Rosetta. The app target's `SPARKLE_PUBLIC_ED_KEY` build
+setting must contain the public key printed by Sparkle's
+`generate_keys` tool. Its private key belongs in the macOS Keychain and a GitHub
+Actions secret, never in the project or a build setting.
+
+The release workflow generates each architecture's feed from the final notarized
+DMG, verifies the signature and release metadata are present, and publishes the
+feeds to GitHub Pages after both downloads are available on GitHub Releases. The
+private key is supplied through stdin; raw tool output is removed and never uploaded.
+Feeds currently advertise the latest release for each architecture; delta updates
+are disabled.
+
+Before shipping, set the `SPARKLE_PRIVATE_KEY` repository secret and enable GitHub
+Pages with GitHub Actions as its source. The `github-pages` environment must allow
+deployment from release tags matching `v*`. Test an update between two signed and
+notarized builds before shipping this integration.
+
+Automatic checks use Sparkle's consent prompt and daily schedule. Automatic
+installation and system profiling are disabled, and downloaded updates must pass
+signature validation before extraction. While an update is pending, the app appears
+in the Dock so Sparkle's windows remain reachable; scheduled updates add a Dock badge.
+The app returns to the menu bar when the update session ends.
+Tests and previews do not start the updater. Use `--disable-updater` when launching
+a development build that should not check the production feed.
 

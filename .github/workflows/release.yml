@@ -38,8 +38,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Test notarization log privacy
-        run: python3 .github/scripts/tests/test_notarization_privacy.py
+      - name: Test release signing helpers
+        run: python3 -m unittest discover -s .github/scripts/tests
 
       - name: Read tag version
         id: version
@@ -49,8 +49,8 @@ jobs:
           tag="${GITHUB_REF_NAME}"
           version="${tag#v}"
 
-          if [[ -z "${version}" || "${version}" == "${tag}" ]]; then
-            echo "Release tags must use the v<version> format." >&2
+          if [[ "${GITHUB_REF_TYPE}" != tag || ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Run releases from a stable v<major>.<minor>.<patch> tag." >&2
             exit 1
           fi
 
@@ -78,6 +78,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SPARKLE_KEY_CONFIGURED: ${{ secrets.SPARKLE_PRIVATE_KEY != '' }}
         run: |
           set +x
           set -euo pipefail
@@ -89,6 +90,10 @@ jobs:
               exit 1
             fi
           done
+          if [[ "${SPARKLE_KEY_CONFIGURED}" != true ]]; then
+            echo "SPARKLE_PRIVATE_KEY is not configured." >&2
+            exit 1
+          fi
 
           certificate_path="${RUNNER_TEMP}/signing-certificate.p12"
           keychain_path="${RUNNER_TEMP}/signing.keychain-db"
@@ -266,6 +271,18 @@ jobs:
           xcrun stapler validate "${DMG_PATH}"
           spctl --assess --type open --context context:primary-signature --verbose=2 "${DMG_PATH}"
 
+      - name: Sign and validate Sparkle feed
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          DMG_PATH: ${{ steps.dmg.outputs.path }}
+          TAG: ${{ steps.version.outputs.tag }}
+          BUILD_NUMBER: ${{ steps.build.outputs.number }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          bash .github/scripts/generate-appcast.sh \
+            "${RUNNER_TEMP}/DerivedData-${ARCH}/SourcePackages/artifacts/sparkle/Sparkle/bin" \
+            "${DMG_PATH}" "${ARCH}" "${TAG}" "${BUILD_NUMBER}" "${RUNNER_TEMP}/feeds"
+
       - name: Remove signing credentials
         id: cleanup_signing
         if: always()
@@ -274,6 +291,7 @@ jobs:
           keychain_path="${RUNNER_TEMP}/signing.keychain-db"
           rm -f "${RUNNER_TEMP}/signing-certificate.p12"
           rm -rf "${RUNNER_TEMP}"/notarization-private.*
+          rm -rf "${RUNNER_TEMP}"/sparkle-private.*
           if [[ -f "${keychain_path}" ]]; then
             if ! security delete-keychain "${keychain_path}" > /dev/null 2>&1; then
               echo "Signing keychain cleanup failed." >&2
@@ -297,6 +315,13 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Upload signed update feed
+        uses: actions/upload-artifact@v4
+        with:
+          name: appcast-${{ matrix.arch }}
+          path: ${{ runner.temp }}/feeds/appcast-${{ matrix.arch }}.xml
+          if-no-files-found: error
+
   publish:
     name: Publish verified release
     needs: release
@@ -310,6 +335,13 @@ jobs:
           pattern: release-*
           merge-multiple: true
           path: release
+
+      - name: Download both update feeds
+        uses: actions/download-artifact@v4
+        with:
+          pattern: appcast-*
+          merge-multiple: true
+          path: feeds
 
       - name: Create GitHub release
         env:
@@ -333,9 +365,35 @@ jobs:
               --verify-tag
           fi
 
+      - name: Upload feeds for GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: feeds
+
+  deploy-feeds:
+    name: Publish Sparkle feeds
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: sparkle-feeds
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Deploy update feeds
+        id: deployment
+        uses: actions/deploy-pages@v4
+
   notify-tap:
     name: Notify Homebrew tap
-    needs: [release, publish]
+    needs: [release, publish, deploy-feeds]
     runs-on: ubuntu-latest
     environment: homebrew-tap
 

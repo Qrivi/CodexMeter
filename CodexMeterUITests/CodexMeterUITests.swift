@@ -15,6 +15,7 @@ final class CodexMeterUITests: XCTestCase {
     @MainActor
     func testAppLaunches() throws {
         let app = XCUIApplication()
+        app.launchArguments.append("--disable-updater")
         app.launch()
 
         XCTAssertTrue(app.exists)
@@ -22,8 +23,10 @@ final class CodexMeterUITests: XCTestCase {
 
     @MainActor
     func testLaunchPerformance() throws {
+        let app = XCUIApplication()
+        app.launchArguments.append("--disable-updater")
         measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
+            app.launch()
         }
     }
 }

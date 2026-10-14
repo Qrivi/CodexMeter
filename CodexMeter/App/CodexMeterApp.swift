@@ -4,6 +4,7 @@ import SwiftUI
 @main
 struct CodexMeterApp: App {
     @StateObject private var viewModel: UsageViewModel
+    @StateObject private var updater = AppUpdater()
 
     init() {
         NSApplication.shared.setActivationPolicy(.accessory)
@@ -23,16 +24,18 @@ struct CodexMeterApp: App {
     var body: some Scene {
         MenuBarExtra {
             UsageMenuView(viewModel: viewModel)
+                .environmentObject(updater)
         } label: {
             MenuBarStatusLabel(viewModel: viewModel)
         }
         .menuBarExtraStyle(.window)
         .commands {
-            CodexMeterCommands(quit: viewModel.quit)
+            CodexMeterCommands(updater: updater, quit: viewModel.quit)
         }
 
         Window("CodexMeter Settings", id: "settings") {
             SettingsView(viewModel: viewModel)
+                .environmentObject(updater)
         }
         .windowResizability(.contentSize)
     }

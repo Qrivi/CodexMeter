@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		5F9C10432FE0000100000001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5F9C10432FE0000100000002 /* Sparkle */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		18EDBE3A2FA9E0D0003487CD /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -29,9 +33,22 @@
 		18EDBE432FA9E0D0003487CD /* CodexMeterUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CodexMeterUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		5F9C10432FE0000100000004 /* Exceptions for "CodexMeter" folder in "CodexMeter" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 18EDBE2B2FA9E0CF003487CD /* CodexMeter */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		18EDBE2E2FA9E0CF003487CD /* CodexMeter */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5F9C10432FE0000100000004 /* Exceptions for "CodexMeter" folder in "CodexMeter" target */,
+			);
 			path = CodexMeter;
 			sourceTree = "<group>";
 		};
@@ -52,6 +69,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5F9C10432FE0000100000001 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +130,7 @@
 			);
 			name = CodexMeter;
 			packageProductDependencies = (
+				5F9C10432FE0000100000002 /* Sparkle */,
 			);
 			productName = CodexMeter;
 			productReference = 18EDBE2C2FA9E0CF003487CD /* CodexMeter.app */;
@@ -195,6 +214,9 @@
 			);
 			mainGroup = 18EDBE232FA9E0CF003487CD;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5F9C10432FE0000100000003 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 18EDBE2D2FA9E0CF003487CD /* Products */;
 			projectDirPath = "";
@@ -409,6 +431,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = CodexMeter/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = CodexMeter;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
@@ -417,10 +440,11 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.qrivi.CodexMeter;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
+				SPARKLE_PUBLIC_ED_KEY = "0CcEr4YzSwCgZfhhirswc7G1zKYqmdq7gwTehGBRzSs=";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -446,6 +470,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = CodexMeter/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = CodexMeter;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
@@ -454,10 +479,11 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.qrivi.CodexMeter;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
+				SPARKLE_PUBLIC_ED_KEY = "0CcEr4YzSwCgZfhhirswc7G1zKYqmdq7gwTehGBRzSs=";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -591,6 +617,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5F9C10432FE0000100000003 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.10.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5F9C10432FE0000100000002 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5F9C10432FE0000100000003 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 18EDBE242FA9E0CF003487CD /* Project object */;
 }
