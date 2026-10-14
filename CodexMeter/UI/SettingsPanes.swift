@@ -19,7 +19,7 @@ struct GeneralSettingsPane: View {
                 }
             }
 
-            Section("Updates") {
+            Section("Polling") {
                 SettingsPickerRow(
                     title: "Polling rate",
                     description: "Choose how often CodexMeter refreshes usage in the background.",
@@ -339,7 +339,7 @@ struct MeterSettingsPane: View {
 }
 
 struct AboutSettingsPane: View {
-    @StateObject private var model = AboutPaneModel()
+    @EnvironmentObject private var updater: AppUpdater
 
     var body: some View {
         SettingsPaneContainer {
@@ -362,7 +362,7 @@ struct AboutSettingsPane: View {
                         }
                     }
 
-                    Text("Small menu bar app for monitoring Codex usage limits.")
+                    Text("Small menu bar app for monitoring ChatGPT usage limits.")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -370,27 +370,21 @@ struct AboutSettingsPane: View {
             }
 
             Section("Updates") {
-                VStack(alignment: .leading, spacing: 10) {
-                    updateStatusView
-                    
-                    Divider()
+                UpdateStatusRow(
+                    status: updater.updateStatus,
+                    canCheckForUpdates: updater.canCheckForUpdates,
+                    checkForUpdates: updater.checkForUpdates
+                )
 
-                    Text("Install with Homebrew for the simplest updates:")
-                        .foregroundStyle(.secondary)
-
-                    Text("brew install qrivi/tap/codexmeter")
-                        .font(.system(.body, design: .monospaced))
-                        .textSelection(.enabled)
-
-                    Text("Then update with:")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Text("brew upgrade codexmeter")
-                        .font(.system(.body, design: .monospaced))
-                        .textSelection(.enabled)
-                }
-                .padding(.vertical, 4)
+                SettingsToggleRow(
+                    title: "Automatically check for updates",
+                    description: "Check daily. You choose when to install and relaunch.",
+                    isOn: Binding(
+                        get: { updater.automaticallyChecksForUpdates },
+                        set: { updater.setAutomaticallyChecksForUpdates($0) }
+                    )
+                )
+                .disabled(!updater.isConfigured)
             }
 
             Section("Privacy") {
@@ -417,8 +411,11 @@ struct AboutSettingsPane: View {
                 .padding(.vertical, 4)
             }
         }
-        .task {
-            model.checkForUpdates()
+        .onAppear(perform: updater.refreshUpdateStatus)
+        .onChange(of: updater.isUpdateSessionInProgress) { _, inProgress in
+            if !inProgress && updater.updateStatus == .notChecked {
+                updater.refreshUpdateStatus()
+            }
         }
     }
 
@@ -433,39 +430,6 @@ struct AboutSettingsPane: View {
             return "Version \(version)"
         default:
             return "Version unavailable"
-        }
-    }
-
-    @ViewBuilder
-    private var updateStatusView: some View {
-        switch model.updateStatus {
-        case .idle, .checking:
-            Label("Checking GitHub for updates...", systemImage: "arrow.triangle.2.circlepath")
-                .foregroundStyle(.secondary)
-
-        case let .current(latestVersion):
-            Label("You are on the latest release, \(latestVersion).", systemImage: "checkmark.circle")
-                .foregroundStyle(UsageStatusPalette.good)
-
-        case let .updateAvailable(release):
-            VStack(alignment: .leading, spacing: 8) {
-                Label("Update available: \(release.version)", systemImage: "arrow.down.circle")
-                    .foregroundStyle(UsageStatusPalette.warning)
-
-                Link(destination: release.pageURL) {
-                    Label("Open latest release", systemImage: "arrow.up.right.square")
-                }
-            }
-
-        case .unavailable:
-            VStack(alignment: .leading, spacing: 8) {
-                Label("Could not check for updates right now.", systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.secondary)
-
-                Button("Check Again") {
-                    model.checkForUpdates()
-                }
-            }
         }
     }
 
@@ -498,6 +462,7 @@ struct SettingsPanes_Previews: PreviewProvider {
                 .previewDisplayName("Meter Settings")
 
             AboutSettingsPane()
+                .environmentObject(AppUpdater(startingUpdater: false))
                 .frame(width: 520, height: 280)
                 .previewDisplayName("About Settings")
         }

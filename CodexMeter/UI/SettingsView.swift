@@ -139,6 +139,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
 struct SettingsView_Previews: PreviewProvider {
     static var previews: some View {
         SettingsView(viewModel: PreviewSupport.viewModel())
+            .environmentObject(AppUpdater(startingUpdater: false))
             .previewDisplayName("Settings Window")
     }
 }

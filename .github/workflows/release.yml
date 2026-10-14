@@ -5,12 +5,22 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build signed and notarized test artifacts without publishing
+        type: boolean
+        default: false
+      test_build_number:
+        description: Optional build number for dry_run update testing (e.g. 1000, then 1001)
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  # Serialize publication across tags, including retries of older releases.
+  group: release-${{ inputs.dry_run && github.ref || 'production' }}
   cancel-in-progress: false
 
 jobs:
@@ -38,38 +48,21 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Test notarization log privacy
-        run: python3 .github/scripts/tests/test_notarization_privacy.py
+      - name: Test release signing helpers
+        run: python3 -m unittest discover -s .github/scripts/tests
 
-      - name: Read tag version
+      - name: Read release metadata
         id: version
-        run: |
-          set -euo pipefail
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          TEST_BUILD_NUMBER: ${{ inputs.test_build_number }}
+        run: bash .github/scripts/release-metadata.sh
 
-          tag="${GITHUB_REF_NAME}"
-          version="${tag#v}"
-
-          if [[ -z "${version}" || "${version}" == "${tag}" ]]; then
-            echo "Release tags must use the v<version> format." >&2
-            exit 1
-          fi
-
-          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-
-      - name: Compute build number
-        id: build
-        run: |
-          set -euo pipefail
-
-          build_number="$(git rev-list --count HEAD)"
-          if [[ -z "${build_number}" || "${build_number}" == "0" ]]; then
-            echo "Unable to compute build number." >&2
-            exit 1
-          fi
-
-          echo "number=${build_number}" >> "${GITHUB_OUTPUT}"
-          echo "Build number: ${build_number}"
+      - name: Require production release notes
+        if: ${{ !inputs.dry_run }}
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: bash .github/scripts/check-release-notes.sh "${TAG}"
 
       - name: Prepare signing and notarization
         env:
@@ -78,6 +71,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SPARKLE_KEY_CONFIGURED: ${{ secrets.SPARKLE_PRIVATE_KEY != '' }}
         run: |
           set +x
           set -euo pipefail
@@ -89,6 +83,10 @@ jobs:
               exit 1
             fi
           done
+          if [[ "${SPARKLE_KEY_CONFIGURED}" != true ]]; then
+            echo "SPARKLE_PRIVATE_KEY is not configured." >&2
+            exit 1
+          fi
 
           certificate_path="${RUNNER_TEMP}/signing-certificate.p12"
           keychain_path="${RUNNER_TEMP}/signing.keychain-db"
@@ -148,9 +146,10 @@ jobs:
             -derivedDataPath "${RUNNER_TEMP}/DerivedData-${{ matrix.arch }}" \
             -archivePath "${RUNNER_TEMP}/CodexMeter.xcarchive" \
             -hideShellScriptEnvironment \
+            -onlyUsePackageVersionsFromResolvedFile \
             ARCHS="${{ matrix.arch }}" \
             ONLY_ACTIVE_ARCH=NO \
-            CURRENT_PROJECT_VERSION="${{ steps.build.outputs.number }}" \
+            CURRENT_PROJECT_VERSION="${{ steps.version.outputs.number }}" \
             MARKETING_VERSION="${{ steps.version.outputs.version }}" \
             DEVELOPMENT_TEAM="${APPLE_TEAM_ID}" \
             CODE_SIGN_STYLE=Manual \
@@ -188,6 +187,8 @@ jobs:
             exit 1
           fi
 
+          python3 .github/scripts/verify-sparkle-config.py "${info_plist}"
+
           codesign --verify --deep --strict --verbose=2 "${app_path}"
           codesign --verify --strict \
             -R='anchor apple generic and certificate leaf[field.1.2.840.113635.100.6.1.13] exists' \
@@ -200,8 +201,8 @@ jobs:
           fi
 
           plist_build_number="$(plutil -extract CFBundleVersion raw -o - "${info_plist}")"
-          if [[ "${plist_build_number}" != "${{ steps.build.outputs.number }}" ]]; then
-            echo "Expected CFBundleVersion ${{ steps.build.outputs.number }}, got ${plist_build_number}." >&2
+          if [[ "${plist_build_number}" != "${{ steps.version.outputs.number }}" ]]; then
+            echo "Expected CFBundleVersion ${{ steps.version.outputs.number }}, got ${plist_build_number}." >&2
             exit 1
           fi
 
@@ -266,6 +267,27 @@ jobs:
           xcrun stapler validate "${DMG_PATH}"
           spctl --assess --type open --context context:primary-signature --verbose=2 "${DMG_PATH}"
 
+      - name: Reuse published DMG on production retries
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.version.outputs.tag }}
+          DMG_PATH: ${{ steps.dmg.outputs.path }}
+        run: bash .github/scripts/release-assets.sh reuse "${TAG}" "${DMG_PATH}"
+
+      - name: Sign and validate Sparkle feed
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          DMG_PATH: ${{ steps.dmg.outputs.path }}
+          TAG: ${{ steps.version.outputs.tag }}
+          BUILD_NUMBER: ${{ steps.version.outputs.number }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          bash .github/scripts/generate-appcast.sh \
+            "${RUNNER_TEMP}/DerivedData-${ARCH}/SourcePackages/artifacts/sparkle/Sparkle/bin" \
+            "${DMG_PATH}" "${ARCH}" "${TAG}" "${BUILD_NUMBER}" "${RUNNER_TEMP}/feeds"
+
       - name: Remove signing credentials
         id: cleanup_signing
         if: always()
@@ -274,6 +296,7 @@ jobs:
           keychain_path="${RUNNER_TEMP}/signing.keychain-db"
           rm -f "${RUNNER_TEMP}/signing-certificate.p12"
           rm -rf "${RUNNER_TEMP}"/notarization-private.*
+          rm -rf "${RUNNER_TEMP}"/sparkle-private.*
           if [[ -f "${keychain_path}" ]]; then
             if ! security delete-keychain "${keychain_path}" > /dev/null 2>&1; then
               echo "Signing keychain cleanup failed." >&2
@@ -284,7 +307,7 @@ jobs:
       - name: Upload verified DMG
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.arch }}
+          name: ${{ inputs.dry_run && 'test-release' || 'release' }}-${{ matrix.arch }}
           path: ${{ steps.dmg.outputs.path }}
           if-no-files-found: error
 
@@ -297,13 +320,37 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Upload signed update feed
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.dry_run && 'test-appcast' || 'appcast' }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/feeds/appcast-${{ matrix.arch }}.xml
+          if-no-files-found: error
+
   publish:
     name: Publish verified release
+    if: ${{ !inputs.dry_run }}
     needs: release
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Reject superseded release runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/${GH_REPO}/releases" \
+            --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name' \
+            | python3 .github/scripts/check-release-order.py "${TAG}"
+
       - name: Download both DMGs
         uses: actions/download-artifact@v4
         with:
@@ -311,31 +358,51 @@ jobs:
           merge-multiple: true
           path: release
 
-      - name: Create GitHub release
+      - name: Download both update feeds
+        uses: actions/download-artifact@v4
+        with:
+          pattern: appcast-*
+          merge-multiple: true
+          path: feeds
+
+      - name: Create or update GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.release.outputs.tag }}
-        run: |
-          set -euo pipefail
+        run: bash .github/scripts/release-assets.sh publish "${TAG}" release
 
-          assets=("release/CodexMeter-${TAG}-arm64.dmg" "release/CodexMeter-${TAG}-x86_64.dmg")
-          for asset in "${assets[@]}"; do
-            test -f "${asset}"
-          done
+      - name: Upload feeds for GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: feeds
 
-          if gh release view "${TAG}" > /dev/null 2>&1; then
-            gh release upload "${TAG}" "${assets[@]}" --clobber
-          else
-            gh release create "${TAG}" "${assets[@]}" \
-              --title "CodexMeter ${TAG}" \
-              --notes "CodexMeter ${TAG}" \
-              --verify-tag
-          fi
+  deploy-feeds:
+    name: Publish Sparkle feeds
+    if: ${{ !inputs.dry_run }}
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: sparkle-feeds
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Deploy update feeds
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   notify-tap:
     name: Notify Homebrew tap
-    needs: [release, publish]
+    if: ${{ !inputs.dry_run }}
+    needs: [release, publish, deploy-feeds]
     runs-on: ubuntu-latest
     environment: homebrew-tap
 

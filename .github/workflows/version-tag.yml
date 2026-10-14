@@ -61,6 +61,7 @@ jobs:
             -project CodexMeter.xcodeproj \
             -scheme CodexMeter \
             -configuration Release \
+            -onlyUsePackageVersionsFromResolvedFile \
             | awk -F'= ' '/MARKETING_VERSION/ {print $2; exit}')"
 
           if [[ -z "${version}" ]]; then
@@ -73,6 +74,12 @@ jobs:
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
           echo "CodexMeter version: ${version}"
           echo "Expected tag: ${tag}"
+
+      - name: Require release notes for app version
+        if: steps.changes.outputs.needs_build == 'true'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: bash .github/scripts/check-release-notes.sh "${TAG}"
 
       - name: Skip version check for non-build PR
         if: steps.changes.outputs.needs_build != 'true'
@@ -144,6 +151,7 @@ jobs:
             -project CodexMeter.xcodeproj \
             -scheme CodexMeter \
             -configuration Release \
+            -onlyUsePackageVersionsFromResolvedFile \
             | awk -F'= ' '/MARKETING_VERSION/ {print $2; exit}')"
 
           if [[ -z "${version}" ]]; then
@@ -156,6 +164,12 @@ jobs:
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
           echo "CodexMeter version: ${version}"
           echo "Expected tag: ${tag}"
+
+      - name: Require release notes for app version
+        if: steps.changes.outputs.needs_build == 'true'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: bash .github/scripts/check-release-notes.sh "${TAG}"
 
       - name: Create and push tag
         if: steps.changes.outputs.needs_build == 'true'

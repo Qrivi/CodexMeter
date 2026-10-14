@@ -58,7 +58,7 @@ enum MenuActionCatalog {
             keepsMenuOpenAfterActivation: true
         ),
         MenuActionDescriptor(id: .dashboard, title: "Open Usage Dashboard", systemImage: "chart.bar"),
-        MenuActionDescriptor(id: .codexApp, title: "Open Codex App", assetImage: "CodexLogo")
+        MenuActionDescriptor(id: .codexApp, title: "Open ChatGPT App", assetImage: "CodexLogo")
     ]
 
     static let appActions = appActions(on: ProcessInfo.processInfo.operatingSystemVersion)

@@ -4,6 +4,7 @@ import SwiftUI
 @main
 struct CodexMeterApp: App {
     @StateObject private var viewModel: UsageViewModel
+    @StateObject private var updater = AppUpdater()
 
     init() {
         NSApplication.shared.setActivationPolicy(.accessory)
@@ -33,6 +34,7 @@ struct CodexMeterApp: App {
 
         Window("CodexMeter Settings", id: "settings") {
             SettingsView(viewModel: viewModel)
+                .environmentObject(updater)
         }
         .windowResizability(.contentSize)
     }

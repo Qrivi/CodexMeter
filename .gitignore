@@ -1,6 +1,7 @@
 .DS_Store
 .DerivedData/
 build/
+__pycache__/
 
 # Xcode user state
 *.xcuserstate
