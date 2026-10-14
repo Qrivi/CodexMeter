@@ -55,7 +55,16 @@ These cover success, rejection, timeout, malformed responses, failed log downloa
 unsigned feeds, incorrect release metadata, and accidental key output.
 
 To rerun the release workflow manually, select the intended `v<version>` tag.
-The exported app version is taken from that tag.
+The exported app version is taken from that tag. Production releases must follow
+`main`'s existing history, as the version-tag workflow does. Do not cut production
+tags from divergent branches or rewrite released history: Sparkle compares the
+commit-count build number, which must increase between releases. Merge commits are
+supported.
+
+Production release runs are serialized across tags. Before publication, the workflow
+checks all published stable release versions and rejects retries older than the
+highest version. Retrying the latest release remains supported; a failed release-list
+request stops publication rather than bypassing the check.
 
 ## Sparkle setup
 

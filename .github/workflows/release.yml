@@ -10,7 +10,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  # Serialize publication across tags, including retries of older releases.
+  group: release-production
   cancel-in-progress: false
 
 jobs:
@@ -332,6 +333,22 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Reject superseded release runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/${GH_REPO}/releases" \
+            --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name' \
+            | python3 .github/scripts/check-release-order.py "${TAG}"
+
       - name: Download both DMGs
         uses: actions/download-artifact@v4
         with:
