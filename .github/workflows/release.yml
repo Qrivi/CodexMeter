@@ -5,13 +5,22 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build signed and notarized test artifacts without publishing
+        type: boolean
+        default: false
+      test_build_number:
+        description: Optional build number for dry_run update testing (e.g. 1000, then 1001)
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
 concurrency:
   # Serialize publication across tags, including retries of older releases.
-  group: release-production
+  group: release-${{ inputs.dry_run && github.ref || 'production' }}
   cancel-in-progress: false
 
 jobs:
@@ -42,35 +51,12 @@ jobs:
       - name: Test release signing helpers
         run: python3 -m unittest discover -s .github/scripts/tests
 
-      - name: Read tag version
+      - name: Read release metadata
         id: version
-        run: |
-          set -euo pipefail
-
-          tag="${GITHUB_REF_NAME}"
-          version="${tag#v}"
-
-          if [[ "${GITHUB_REF_TYPE}" != tag || ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Run releases from a stable v<major>.<minor>.<patch> tag." >&2
-            exit 1
-          fi
-
-          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-
-      - name: Compute build number
-        id: build
-        run: |
-          set -euo pipefail
-
-          build_number="$(git rev-list --count HEAD)"
-          if [[ -z "${build_number}" || "${build_number}" == "0" ]]; then
-            echo "Unable to compute build number." >&2
-            exit 1
-          fi
-
-          echo "number=${build_number}" >> "${GITHUB_OUTPUT}"
-          echo "Build number: ${build_number}"
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          TEST_BUILD_NUMBER: ${{ inputs.test_build_number }}
+        run: bash .github/scripts/release-metadata.sh
 
       - name: Prepare signing and notarization
         env:
@@ -157,7 +143,7 @@ jobs:
             -onlyUsePackageVersionsFromResolvedFile \
             ARCHS="${{ matrix.arch }}" \
             ONLY_ACTIVE_ARCH=NO \
-            CURRENT_PROJECT_VERSION="${{ steps.build.outputs.number }}" \
+            CURRENT_PROJECT_VERSION="${{ steps.version.outputs.number }}" \
             MARKETING_VERSION="${{ steps.version.outputs.version }}" \
             DEVELOPMENT_TEAM="${APPLE_TEAM_ID}" \
             CODE_SIGN_STYLE=Manual \
@@ -209,8 +195,8 @@ jobs:
           fi
 
           plist_build_number="$(plutil -extract CFBundleVersion raw -o - "${info_plist}")"
-          if [[ "${plist_build_number}" != "${{ steps.build.outputs.number }}" ]]; then
-            echo "Expected CFBundleVersion ${{ steps.build.outputs.number }}, got ${plist_build_number}." >&2
+          if [[ "${plist_build_number}" != "${{ steps.version.outputs.number }}" ]]; then
+            echo "Expected CFBundleVersion ${{ steps.version.outputs.number }}, got ${plist_build_number}." >&2
             exit 1
           fi
 
@@ -280,7 +266,7 @@ jobs:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
           DMG_PATH: ${{ steps.dmg.outputs.path }}
           TAG: ${{ steps.version.outputs.tag }}
-          BUILD_NUMBER: ${{ steps.build.outputs.number }}
+          BUILD_NUMBER: ${{ steps.version.outputs.number }}
           ARCH: ${{ matrix.arch }}
         run: |
           bash .github/scripts/generate-appcast.sh \
@@ -306,7 +292,7 @@ jobs:
       - name: Upload verified DMG
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.arch }}
+          name: ${{ inputs.dry_run && 'test-release' || 'release' }}-${{ matrix.arch }}
           path: ${{ steps.dmg.outputs.path }}
           if-no-files-found: error
 
@@ -322,12 +308,13 @@ jobs:
       - name: Upload signed update feed
         uses: actions/upload-artifact@v4
         with:
-          name: appcast-${{ matrix.arch }}
+          name: ${{ inputs.dry_run && 'test-appcast' || 'appcast' }}-${{ matrix.arch }}
           path: ${{ runner.temp }}/feeds/appcast-${{ matrix.arch }}.xml
           if-no-files-found: error
 
   publish:
     name: Publish verified release
+    if: ${{ !inputs.dry_run }}
     needs: release
     runs-on: ubuntu-latest
     permissions:
@@ -379,9 +366,13 @@ jobs:
           if gh release view "${TAG}" > /dev/null 2>&1; then
             gh release upload "${TAG}" "${assets[@]}" --clobber
           else
+            notes=(--notes "CodexMeter ${TAG}")
+            if [[ -f ".github/release-notes/${TAG}.md" ]]; then
+              notes=(--notes-file ".github/release-notes/${TAG}.md")
+            fi
             gh release create "${TAG}" "${assets[@]}" \
               --title "CodexMeter ${TAG}" \
-              --notes "CodexMeter ${TAG}" \
+              "${notes[@]}" \
               --verify-tag
           fi
 
@@ -392,6 +383,7 @@ jobs:
 
   deploy-feeds:
     name: Publish Sparkle feeds
+    if: ${{ !inputs.dry_run }}
     needs: publish
     runs-on: ubuntu-latest
     permissions:
@@ -413,6 +405,7 @@ jobs:
 
   notify-tap:
     name: Notify Homebrew tap
+    if: ${{ !inputs.dry_run }}
     needs: [release, publish, deploy-feeds]
     runs-on: ubuntu-latest
     environment: homebrew-tap

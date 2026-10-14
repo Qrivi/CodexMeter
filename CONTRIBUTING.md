@@ -100,3 +100,35 @@ The app returns to the menu bar when the update session ends.
 Tests and previews do not start the updater. Use `--disable-updater` when launching
 a development build that should not check the production feed.
 
+## Testing a notarized update
+
+Run the Release workflow manually on the branch under review with `dry_run` enabled.
+This performs the same archive, Developer ID signing, notarization, stapling, bundle
+verification, and Sparkle signing as a production release. It uploads `test-release-*`
+DMGs and `test-appcast-*` feeds as workflow artifacts. It creates no GitHub release,
+deploys no Pages content, and sends no Homebrew tap notification.
+
+For a controlled update test:
+
+1. Run a build-only job with `test_build_number` set to `1000`, then another with
+   `1001`. The marketing version is read from the project; no release tag is needed.
+   Production jobs always use the commit count and reject test build overrides.
+2. Download both runs' artifacts into separate directories. Install the older app in
+   a writable test location and quit any other running copy of CodexMeter.
+3. Host the newer DMG and a copy of its architecture's appcast at an isolated test
+   location. Change only the enclosure's download URL to that test DMG's URL; preserve
+   the signature, length, and version. Keep the signed DMG bytes unchanged. Use HTTPS
+   for a remote test host.
+4. Launch the older test copy with `-SUFeedURL <test-appcast-url>`, then choose
+   **Check for Updates…**. This override applies only to that launch and does not save
+   a feed preference. Verify that the app installs, relaunches, and reports build
+   `1001`. Check both architectures on matching hardware when available.
+
+Keep these test files separate from the production feeds. A successful build-only
+run verifies packaging; the install-and-relaunch check is still a separate step.
+Remove the test copies afterward, since their build numbers are deliberately higher
+than production builds.
+
+When 1.3.0 ships, add `auto_updates true` to the Homebrew cask. Users on 1.2.x need
+one Homebrew upgrade or release download to acquire Sparkle; the 1.3.0 release notes
+call out this transition.

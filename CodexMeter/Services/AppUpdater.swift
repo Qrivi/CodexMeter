@@ -48,10 +48,15 @@ final class AppUpdater: NSObject, ObservableObject, SPUUpdaterDelegate, SPUStand
     }
 
     func feedURLString(for updater: SPUUpdater) -> String? {
+        // A launch-only override lets release tests use an isolated update feed.
+        if let testFeed = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)["SUFeedURL"] as? String {
+            return testFeed
+        }
+
         #if arch(arm64)
-        "https://qrivi.github.io/CodexMeter/appcast-arm64.xml"
+        return "https://qrivi.github.io/CodexMeter/appcast-arm64.xml"
         #else
-        "https://qrivi.github.io/CodexMeter/appcast-x86_64.xml"
+        return "https://qrivi.github.io/CodexMeter/appcast-x86_64.xml"
         #endif
     }
 

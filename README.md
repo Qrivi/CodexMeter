@@ -29,6 +29,13 @@ brew tap qrivi/tap
 brew install --cask qrivi/tap/codexmeter
 ```
 
+## Updates
+
+Starting with 1.3.0, use **Check for Updates…** in CodexMeter to install new versions.
+You can also enable daily checks in About settings; installation and relaunch require
+your approval. Users on 1.2.x need one upgrade through Homebrew or a release download
+to get Sparkle.
+
 ## Development
 
 Open `CodexMeter.xcodeproj` in Xcode and run the `CodexMeter` scheme.
