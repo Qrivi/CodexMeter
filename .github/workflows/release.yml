@@ -153,6 +153,7 @@ jobs:
             -derivedDataPath "${RUNNER_TEMP}/DerivedData-${{ matrix.arch }}" \
             -archivePath "${RUNNER_TEMP}/CodexMeter.xcarchive" \
             -hideShellScriptEnvironment \
+            -onlyUsePackageVersionsFromResolvedFile \
             ARCHS="${{ matrix.arch }}" \
             ONLY_ACTIVE_ARCH=NO \
             CURRENT_PROJECT_VERSION="${{ steps.build.outputs.number }}" \
@@ -192,6 +193,8 @@ jobs:
             echo "Built app is missing ${executable_path}." >&2
             exit 1
           fi
+
+          python3 .github/scripts/verify-sparkle-config.py "${info_plist}"
 
           codesign --verify --deep --strict --verbose=2 "${app_path}"
           codesign --verify --strict \

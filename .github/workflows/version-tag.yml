@@ -61,6 +61,7 @@ jobs:
             -project CodexMeter.xcodeproj \
             -scheme CodexMeter \
             -configuration Release \
+            -onlyUsePackageVersionsFromResolvedFile \
             | awk -F'= ' '/MARKETING_VERSION/ {print $2; exit}')"
 
           if [[ -z "${version}" ]]; then
@@ -144,6 +145,7 @@ jobs:
             -project CodexMeter.xcodeproj \
             -scheme CodexMeter \
             -configuration Release \
+            -onlyUsePackageVersionsFromResolvedFile \
             | awk -F'= ' '/MARKETING_VERSION/ {print $2; exit}')"
 
           if [[ -z "${version}" ]]; then

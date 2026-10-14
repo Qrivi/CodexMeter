@@ -60,7 +60,9 @@ The exported app version is taken from that tag.
 ## Sparkle setup
 
 The app uses Sparkle 2 through Swift Package Manager. Commit `Package.resolved`
-alongside dependency changes. The app owns one updater shared by the menu and
+alongside dependency changes; CI refuses to resolve versions outside that file.
+The exported app's public key is validated before notarization.
+The app owns one updater shared by the menu and
 settings; Sparkle manages its update schedule and preference persistence.
 
 `AppUpdater` selects the Apple Silicon or Intel feed for the running binary, including
