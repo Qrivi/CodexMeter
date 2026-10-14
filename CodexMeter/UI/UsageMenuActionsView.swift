@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct UsageMenuActionsView: View {
-    @EnvironmentObject private var updater: AppUpdater
     let isRefreshEnabled: Bool
     let refresh: () -> Void
     let openUsageDashboard: () -> Void
@@ -109,8 +108,6 @@ struct UsageMenuActionsView: View {
             openUsageDashboard()
         case .codexApp:
             openCodex()
-        case .checkForUpdates:
-            updater.checkForUpdates()
         case .settings:
             openSettings()
         case .quit:
@@ -126,8 +123,6 @@ struct UsageMenuActionsView: View {
         switch row {
         case .refresh:
             isRefreshEnabled
-        case .checkForUpdates:
-            updater.canCheckForUpdates
         default:
             true
         }
@@ -162,7 +157,6 @@ struct UsageMenuActionsView_Previews: PreviewProvider {
             .frame(width: 340)
             .previewDisplayName("Usage Menu Actions Disabled Refresh")
         }
-        .environmentObject(AppUpdater(startingUpdater: false))
     }
 }
 #endif

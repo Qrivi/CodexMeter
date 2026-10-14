@@ -58,6 +58,12 @@ jobs:
           TEST_BUILD_NUMBER: ${{ inputs.test_build_number }}
         run: bash .github/scripts/release-metadata.sh
 
+      - name: Require production release notes
+        if: ${{ !inputs.dry_run }}
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: bash .github/scripts/check-release-notes.sh "${TAG}"
+
       - name: Prepare signing and notarization
         env:
           MACOS_SIGNING_CERTIFICATE: ${{ secrets.MACOS_SIGNING_CERTIFICATE }}
@@ -350,7 +356,7 @@ jobs:
           merge-multiple: true
           path: feeds
 
-      - name: Create GitHub release
+      - name: Create or update GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -358,6 +364,7 @@ jobs:
         run: |
           set -euo pipefail
 
+          notes_path=".github/release-notes/${TAG}.md"
           assets=("release/CodexMeter-${TAG}-arm64.dmg" "release/CodexMeter-${TAG}-x86_64.dmg")
           for asset in "${assets[@]}"; do
             test -f "${asset}"
@@ -365,14 +372,11 @@ jobs:
 
           if gh release view "${TAG}" > /dev/null 2>&1; then
             gh release upload "${TAG}" "${assets[@]}" --clobber
+            gh release edit "${TAG}" --notes-file "${notes_path}"
           else
-            notes=(--notes "CodexMeter ${TAG}")
-            if [[ -f ".github/release-notes/${TAG}.md" ]]; then
-              notes=(--notes-file ".github/release-notes/${TAG}.md")
-            fi
             gh release create "${TAG}" "${assets[@]}" \
               --title "CodexMeter ${TAG}" \
-              "${notes[@]}" \
+              --notes-file "${notes_path}" \
               --verify-tag
           fi
 

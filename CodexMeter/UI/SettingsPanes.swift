@@ -19,7 +19,7 @@ struct GeneralSettingsPane: View {
                 }
             }
 
-            Section("Updates") {
+            Section("Polling") {
                 SettingsPickerRow(
                     title: "Polling rate",
                     description: "Choose how often CodexMeter refreshes usage in the background.",
@@ -362,7 +362,7 @@ struct AboutSettingsPane: View {
                         }
                     }
 
-                    Text("Small menu bar app for monitoring Codex usage limits.")
+                    Text("Small menu bar app for monitoring ChatGPT usage limits.")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -370,6 +370,12 @@ struct AboutSettingsPane: View {
             }
 
             Section("Updates") {
+                UpdateStatusRow(
+                    status: updater.updateStatus,
+                    canCheckForUpdates: updater.canCheckForUpdates,
+                    checkForUpdates: updater.checkForUpdates
+                )
+
                 SettingsToggleRow(
                     title: "Automatically check for updates",
                     description: "Check daily. You choose when to install and relaunch.",
@@ -379,19 +385,6 @@ struct AboutSettingsPane: View {
                     )
                 )
                 .disabled(!updater.isConfigured)
-
-                HStack {
-                    if !updater.isConfigured {
-                        Text("Updates are unavailable in this build.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    CheckForUpdatesButton()
-                        .buttonStyle(.bordered)
-                }
             }
 
             Section("Privacy") {
@@ -416,6 +409,12 @@ struct AboutSettingsPane: View {
                     }
                 }
                 .padding(.vertical, 4)
+            }
+        }
+        .onAppear(perform: updater.refreshUpdateStatus)
+        .onChange(of: updater.isUpdateSessionInProgress) { _, inProgress in
+            if !inProgress && updater.updateStatus == .notChecked {
+                updater.refreshUpdateStatus()
             }
         }
     }

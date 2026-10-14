@@ -6,7 +6,7 @@ import Testing
 struct MenuRowNavigationTests {
     @Test
     func catalogDefinesRowsInDisplayOrder() {
-        #expect(MenuActionCatalog.rows == [.refresh, .dashboard, .codexApp, .checkForUpdates, .settings, .quit])
+        #expect(MenuActionCatalog.rows == [.refresh, .dashboard, .codexApp, .settings, .quit])
     }
 
     @Test
@@ -14,7 +14,6 @@ struct MenuRowNavigationTests {
         #expect(MenuActionCatalog.rowsByID[.refresh]?.keepsMenuOpenAfterActivation == true)
         #expect(MenuActionCatalog.rowsByID[.dashboard]?.keepsMenuOpenAfterActivation == false)
         #expect(MenuActionCatalog.rowsByID[.codexApp]?.keepsMenuOpenAfterActivation == false)
-        #expect(MenuActionCatalog.rowsByID[.checkForUpdates]?.keepsMenuOpenAfterActivation == false)
         #expect(MenuActionCatalog.rowsByID[.settings]?.keepsMenuOpenAfterActivation == false)
         #expect(MenuActionCatalog.rowsByID[.quit]?.keepsMenuOpenAfterActivation == false)
     }
@@ -50,13 +49,11 @@ struct MenuRowNavigationTests {
     func movesThroughActionRowsInOrder() {
         #expect(MenuRowNavigation.next(after: .refresh) == .dashboard)
         #expect(MenuRowNavigation.next(after: .dashboard) == .codexApp)
-        #expect(MenuRowNavigation.next(after: .codexApp) == .checkForUpdates)
-        #expect(MenuRowNavigation.next(after: .checkForUpdates) == .settings)
+        #expect(MenuRowNavigation.next(after: .codexApp) == .settings)
         #expect(MenuRowNavigation.next(after: .settings) == .quit)
 
         #expect(MenuRowNavigation.previous(before: .quit) == .settings)
-        #expect(MenuRowNavigation.previous(before: .settings) == .checkForUpdates)
-        #expect(MenuRowNavigation.previous(before: .checkForUpdates) == .codexApp)
+        #expect(MenuRowNavigation.previous(before: .settings) == .codexApp)
         #expect(MenuRowNavigation.previous(before: .codexApp) == .dashboard)
         #expect(MenuRowNavigation.previous(before: .dashboard) == .refresh)
     }

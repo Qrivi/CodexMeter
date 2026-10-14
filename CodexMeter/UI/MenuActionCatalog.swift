@@ -4,7 +4,6 @@ enum MenuRowID: Hashable {
     case refresh
     case dashboard
     case codexApp
-    case checkForUpdates
     case settings
     case quit
 }
@@ -59,7 +58,7 @@ enum MenuActionCatalog {
             keepsMenuOpenAfterActivation: true
         ),
         MenuActionDescriptor(id: .dashboard, title: "Open Usage Dashboard", systemImage: "chart.bar"),
-        MenuActionDescriptor(id: .codexApp, title: "Open Codex App", assetImage: "CodexLogo")
+        MenuActionDescriptor(id: .codexApp, title: "Open ChatGPT App", assetImage: "CodexLogo")
     ]
 
     static let appActions = appActions(on: ProcessInfo.processInfo.operatingSystemVersion)
@@ -69,7 +68,6 @@ enum MenuActionCatalog {
 
     static func appActions(on version: OperatingSystemVersion) -> [MenuActionDescriptor] {
         [
-            MenuActionDescriptor(id: .checkForUpdates, title: "Check for Updates…", systemImage: "arrow.down.circle"),
             MenuActionDescriptor(id: .settings, title: "Settings", systemImage: MacOSRelease.isSequoia(version) ? nil : "gear", shortcut: "⌘ ,"),
             MenuActionDescriptor(id: .quit, title: "Quit CodexMeter", systemImage: MacOSRelease.isSequoia(version) ? nil : "xmark.rectangle", shortcut: "⌘ Q")
         ]

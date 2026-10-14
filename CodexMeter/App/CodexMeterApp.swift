@@ -24,13 +24,12 @@ struct CodexMeterApp: App {
     var body: some Scene {
         MenuBarExtra {
             UsageMenuView(viewModel: viewModel)
-                .environmentObject(updater)
         } label: {
             MenuBarStatusLabel(viewModel: viewModel)
         }
         .menuBarExtraStyle(.window)
         .commands {
-            CodexMeterCommands(updater: updater, quit: viewModel.quit)
+            CodexMeterCommands(quit: viewModel.quit)
         }
 
         Window("CodexMeter Settings", id: "settings") {
