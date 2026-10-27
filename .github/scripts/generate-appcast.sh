@@ -31,14 +31,18 @@ trap cleanup EXIT
 mkdir -p "${private_dir}/archives" "${output_dir}"
 cp "${dmg_path}" "${private_dir}/archives/"
 download_url="https://github.com/Qrivi/CodexMeter/releases/download/${tag}/"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+notes_path="${private_dir}/archives/$(basename "${dmg_path}" .dmg).md"
+python3 "${script_dir}/generate-update-notes.py" "${tag}" "${notes_path}"
 
 # The signing key goes through stdin, never command arguments or a key file.
 # Tool output stays private because errors may contain credential information.
 if ! printf '%s' "${SPARKLE_PRIVATE_KEY}" | "${tools_dir}/generate_appcast" \
   --ed-key-file - \
   --maximum-deltas 0 \
+  --embed-release-notes \
   --download-url-prefix "${download_url}" \
-  --full-release-notes-url "https://github.com/Qrivi/CodexMeter/releases/tag/${tag}" \
+  --full-release-notes-url "https://github.com/Qrivi/CodexMeter/releases" \
   --link "https://github.com/Qrivi/CodexMeter" \
   -o "${feed_path}" "${private_dir}/archives" > "${private_dir}/tool.log" 2>&1; then
   echo "Sparkle feed generation failed. Check the signing secret matches the app's public key." >&2
@@ -46,7 +50,7 @@ if ! printf '%s' "${SPARKLE_PRIVATE_KEY}" | "${tools_dir}/generate_appcast" \
 fi
 
 # Sparkle can finish with warnings and omit a signature when the key does not match.
-if ! python3 - "${feed_path}" "${dmg_path}" "${download_url}" "${build_number}" <<'PY'
+if ! python3 - "${feed_path}" "${dmg_path}" "${download_url}" "${build_number}" "${notes_path}" <<'PY'
 import base64
 import os
 from pathlib import Path
@@ -54,7 +58,7 @@ import sys
 import xml.etree.ElementTree as ET
 
 try:
-    feed, dmg, prefix, build = sys.argv[1:]
+    feed, dmg, prefix, build, notes = sys.argv[1:]
     content = Path(feed).read_text()
     if os.environ['SPARKLE_PRIVATE_KEY'].strip() in content:
         raise ValueError('Private key in feed')
@@ -74,6 +78,11 @@ try:
         raise ValueError('Unexpected download length')
     if items[0].findtext(namespace + 'version') != build:
         raise ValueError('Unexpected build number')
+    description = items[0].find('description')
+    if description is None or description.get(namespace + 'format') != 'markdown':
+        raise ValueError('Missing Markdown release notes')
+    if description.text != Path(notes).read_text(encoding='utf-8'):
+        raise ValueError('Unexpected release notes')
 except Exception:
     print('Sparkle feed validation failed. Nothing will be published.', file=sys.stderr)
     sys.exit(1)

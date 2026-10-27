@@ -120,15 +120,17 @@ else:
         generator = self.bin / "generate_appcast"
         # Use a content digest as the mock signature to detect signing rebuilt bytes.
         generator.write_text("""#!/usr/bin/env python3
-import base64, hashlib, pathlib, sys
+import base64, hashlib, html, pathlib, sys
 sys.stdin.read()
 args = sys.argv[1:]
 dmg = next(pathlib.Path(args[-1]).glob('*.dmg'))
 signature = base64.b64encode(hashlib.sha512(dmg.read_bytes()).digest()).decode()
 prefix = args[args.index('--download-url-prefix') + 1]
+notes = dmg.with_suffix('.md').read_text()
 pathlib.Path(args[args.index('-o') + 1]).write_text(f'''
 <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"><channel><item>
 <sparkle:version>123</sparkle:version>
+<description sparkle:format="markdown">{html.escape(notes)}</description>
 <enclosure url="{prefix}{dmg.name}" length="{dmg.stat().st_size}" sparkle:edSignature="{signature}"/>
 </item></channel></rss>''')
 """)

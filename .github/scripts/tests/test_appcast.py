@@ -19,7 +19,7 @@ class AppcastTests(unittest.TestCase):
             tools.mkdir()
             generator = tools / "generate_appcast"
             generator.write_text("""#!/usr/bin/env python3
-import base64, os, pathlib, sys
+import base64, html, os, pathlib, sys
 key = sys.stdin.read()
 assert key == os.environ['SPARKLE_PRIVATE_KEY']
 assert key not in ' '.join(sys.argv)
@@ -36,9 +36,15 @@ signature = '' if mode == 'unsigned' else base64.b64encode(b'x' * 64).decode()
 url = 'https://example.invalid/wrong.dmg' if mode == 'wrong_url' else prefix + 'CodexMeter-v1.3.0-arm64.dmg'
 length = 99 if mode == 'wrong_length' else 4
 version = '1' if mode == 'wrong_build' else '123'
-description = key if mode == 'key_in_feed' else 'Update available'
+assert '--embed-release-notes' in sys.argv
+assert sys.argv[sys.argv.index('--full-release-notes-url') + 1] == 'https://github.com/Qrivi/CodexMeter/releases'
+notes = next(pathlib.Path(sys.argv[-1]).glob('*.md')).read_text()
+assert '# Version 1.3.0' in notes
+assert '# Version 1.3.1' not in notes
+description = key if mode == 'key_in_feed' else 'Wrong notes' if mode == 'wrong_notes' else notes
+notes_format = 'plain-text' if mode == 'wrong_notes_format' else 'markdown'
 feed.write_text(f'''<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
-<channel><item><sparkle:version>{version}</sparkle:version><description>{description}</description>
+<channel><item><sparkle:version>{version}</sparkle:version><description sparkle:format="{notes_format}">{html.escape(description)}</description>
 <enclosure url="{url}" length="{length}" sparkle:edSignature="{signature}"/></item></channel></rss>''')
 """)
             generator.chmod(0o700)
@@ -70,7 +76,7 @@ feed.write_text(f'''<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespa
         self.run_generator("valid")
 
     def test_invalid_or_unsigned_feeds_are_rejected(self):
-        for mode in ["unsigned", "wrong_url", "wrong_length", "wrong_build"]:
+        for mode in ["unsigned", "wrong_url", "wrong_length", "wrong_build", "wrong_notes", "wrong_notes_format"]:
             with self.subTest(mode=mode):
                 self.run_generator(mode)
 

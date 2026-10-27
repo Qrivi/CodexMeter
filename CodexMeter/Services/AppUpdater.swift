@@ -102,6 +102,15 @@ final class AppUpdater: NSObject, ObservableObject, SPUUpdaterDelegate, SPUStand
 
     var supportsGentleScheduledUpdateReminders: Bool { true }
 
+    func standardUserDriverWillShowReleaseNotesText(
+        _ releaseNotesAttributedString: NSAttributedString,
+        forUpdate update: SUAppcastItem,
+        withBundleDisplayVersion bundleDisplayVersion: String,
+        bundleVersion: String
+    ) -> NSAttributedString? {
+        UpdateReleaseNotes.relevantNotes(releaseNotesAttributedString, installedVersion: bundleDisplayVersion)
+    }
+
     func standardUserDriverWillHandleShowingUpdate(
         _ handleShowingUpdate: Bool,
         forUpdate update: SUAppcastItem,

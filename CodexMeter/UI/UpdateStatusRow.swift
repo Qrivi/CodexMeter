@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct UpdateStatusRow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let status: AppUpdateStatus
     let canCheckForUpdates: Bool
     let checkForUpdates: () -> Void
@@ -34,8 +36,13 @@ struct UpdateStatusRow: View {
             Label("Update status not checked.", systemImage: "info.circle")
                 .foregroundStyle(.secondary)
         case .checking:
-            Label("Checking for updates…", systemImage: "arrow.triangle.2.circlepath")
-                .foregroundStyle(.secondary)
+            Label {
+                Text("Checking for updates…")
+            } icon: {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .symbolEffect(.rotate.wholeSymbol, options: .repeat(.continuous), isActive: !reduceMotion)
+            }
+            .foregroundStyle(.secondary)
         case .current:
             Label("You are on the latest release.", systemImage: "checkmark.circle")
                 .foregroundStyle(UsageStatusPalette.good)
