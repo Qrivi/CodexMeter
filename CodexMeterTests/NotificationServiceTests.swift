@@ -125,15 +125,13 @@ struct NotificationServiceTests {
     }
 
     @Test
-    func changesWhileDisabledHiddenOrUnavailableDoNotProduceCatchUpNotifications() async {
+    func changesWhileDisabledOrHiddenDoNotProduceCatchUpNotifications() async {
         let tracker = NotificationTracker()
         let service = makeNotificationService(tracker: tracker)
         let enabled = MeterPreferences(creditsAddedNotificationsEnabled: true)
         await service.evaluateNotifications(for: balanceSnapshot(credits: 10), settings: [.credits: enabled])
         await service.evaluateNotifications(for: balanceSnapshot(credits: 20), settings: [:])
         await service.evaluateNotifications(for: balanceSnapshot(credits: 30), settings: [.credits: enabled])
-        await service.evaluateNotifications(for: balanceSnapshot(), settings: [.credits: enabled])
-        await service.evaluateNotifications(for: balanceSnapshot(credits: 40), settings: [.credits: enabled])
         var hidden = enabled
         hidden.isVisible = false
         await service.evaluateNotifications(for: balanceSnapshot(credits: 50), settings: [.credits: hidden])
@@ -200,6 +198,176 @@ struct NotificationServiceTests {
         await service.evaluateNotifications(for: snapshot, settings: settings)
 
         #expect(await tracker.identifiers == ["codexmeter-codex-primary-threshold-20"])
+    }
+
+    @Test(arguments: [false, true])
+    func lowAlertsSurviveMissingOrUnavailableMeters(omitted: Bool) async {
+        let tracker = NotificationTracker()
+        let service = makeNotificationService(tracker: tracker)
+        let settings: [UsageMeterID: MeterPreferences] = [
+            .secondary: MeterPreferences(notificationThreshold: .twenty),
+            .credits: MeterPreferences(creditsNotificationThreshold: .ten)
+        ]
+        let snapshot = snapshotWithBalances(weeklyRemaining: 15, credits: 9)
+        await service.evaluateNotifications(for: snapshot, settings: settings)
+        // Absent dynamic meters also have no settings entry in the view model's evaluation.
+        await service.evaluateNotifications(for: missingSnapshot(omitted: omitted), settings: omitted ? [:] : settings)
+        await service.evaluateNotifications(for: snapshot, settings: settings)
+
+        #expect(await tracker.identifiers == ["codexmeter-codex-secondary-threshold-20", "codexmeter-credits-threshold-10"])
+    }
+
+    @Test(arguments: [false, true])
+    func balanceChangesCompareWithLastAvailableObservation(omitted: Bool) async {
+        let tracker = NotificationTracker()
+        let service = makeNotificationService(tracker: tracker)
+        let settings: [UsageMeterID: MeterPreferences] = [
+            .credits: MeterPreferences(creditsAddedNotificationsEnabled: true),
+            .usageLimitResets: MeterPreferences(resetsUsedNotificationsEnabled: true, resetsAddedNotificationsEnabled: true)
+        ]
+        await service.evaluateNotifications(for: balanceSnapshot(credits: 9, resets: 3), settings: settings)
+        await service.evaluateNotifications(for: missingSnapshot(omitted: omitted), settings: omitted ? [:] : settings)
+        await service.evaluateNotifications(for: balanceSnapshot(credits: 8, resets: 2), settings: settings)
+        await service.evaluateNotifications(for: balanceSnapshot(credits: 8, resets: 2), settings: settings)
+        await service.evaluateNotifications(for: balanceSnapshot(credits: 20, resets: 4), settings: settings)
+
+        #expect(await tracker.bodies == [
+            "2 usage limit resets remaining. A reset was used or expired.",
+            "20 credits remaining.",
+            "4 usage limit resets remaining."
+        ])
+    }
+
+    @Test
+    func invalidCreditBalanceAndUnavailablePreferenceUpdatesPreserveLowAlert() async throws {
+        let tracker = NotificationTracker()
+        let service = makeNotificationService(tracker: tracker)
+        var preferences = MeterPreferences(creditsNotificationThreshold: .ten)
+        await service.evaluateNotifications(for: balanceSnapshot(credits: 9), settings: [.credits: preferences])
+        await service.evaluateNotifications(for: balanceSnapshot(credits: .nan), settings: [.credits: preferences])
+        preferences.creditsAddedNotificationsEnabled = true
+        await service.updateAmountNotificationPreferences(
+            for: try #require(balanceSnapshot().creditsMeter), preferences: preferences
+        )
+        await service.evaluateNotifications(for: balanceSnapshot(credits: 8), settings: [.credits: preferences])
+        #expect(await tracker.bodies == ["9 credits remaining."])
+        await service.evaluateNotifications(for: balanceSnapshot(credits: 20), settings: [.credits: preferences])
+        #expect(await tracker.bodies == ["9 credits remaining.", "20 credits remaining."])
+    }
+
+    @Test
+    func newServiceStillAlertsOnStartupWithLowValues() async {
+        let tracker = NotificationTracker()
+        let settings: [UsageMeterID: MeterPreferences] = [
+            .secondary: MeterPreferences(notificationThreshold: .twenty),
+            .credits: MeterPreferences(creditsNotificationThreshold: .ten)
+        ]
+        for _ in 0..<2 {
+            let service = makeNotificationService(tracker: tracker)
+            await service.evaluateNotifications(for: snapshotWithBalances(weeklyRemaining: 15, credits: 9), settings: settings)
+        }
+        #expect(await tracker.identifiers.count == 4)
+    }
+
+    @Test
+    func countdownResetTimeDriftDoesNotRepeatThresholdAlert() async {
+        let tracker = NotificationTracker()
+        let service = makeNotificationService(tracker: tracker)
+        let settings = notificationSettings(threshold: .twenty)
+        for drift in [0.0, 0.25, 30, 59] {
+            let window = UsageWindow(usedPercent: 85, limitWindowSeconds: 18_000, resetAfterSeconds: 7_200, resetAt: nil)
+            let snapshot = UsageFormatting.snapshot(from: UsageResponse(
+                planType: nil, rateLimit: RateLimitInfo(primaryWindow: window, secondaryWindow: nil),
+                additionalRateLimits: nil, credits: nil
+            ), now: Date(timeIntervalSince1970: 1_000 + drift))
+            await service.evaluateNotifications(for: snapshot, settings: settings)
+        }
+        #expect(await tracker.identifiers == ["codexmeter-codex-primary-threshold-20"])
+    }
+
+    @Test
+    func temporarilyMissingResetDateDoesNotRepeatThresholdAlert() async {
+        let tracker = NotificationTracker()
+        let service = makeNotificationService(tracker: tracker)
+        let settings = notificationSettings(threshold: .twenty)
+        for resetAt in [10_000, nil, 10_000, 20_000] as [Double?] {
+            let window = UsageWindow(usedPercent: 85, limitWindowSeconds: 18_000, resetAfterSeconds: nil, resetAt: resetAt)
+            let snapshot = UsageFormatting.snapshot(from: UsageResponse(
+                planType: nil, rateLimit: RateLimitInfo(primaryWindow: window, secondaryWindow: nil),
+                additionalRateLimits: nil, credits: nil
+            ))
+            await service.evaluateNotifications(for: snapshot, settings: settings)
+        }
+        #expect(await tracker.identifiers == ["codexmeter-codex-primary-threshold-20", "codexmeter-codex-primary-threshold-20"])
+    }
+
+    @Test(arguments: [false, true])
+    func overlappingEvaluationsDoNotRepeatAlerts(resetAlert: Bool) async {
+        let tracker = NotificationTracker()
+        let delivery = BlockingNotificationDelivery()
+        let service = NotificationService(
+            authorizationRequester: { true }, authorizationStatusProvider: { .authorized },
+            requestDeliverer: { request in
+                await tracker.record(request: request)
+                await delivery.suspendFirstDelivery()
+            }
+        )
+        let settings = notificationSettings(threshold: resetAlert ? nil : .twenty, resetNotificationsEnabled: resetAlert)
+        if resetAlert {
+            await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 42), settings: settings)
+        }
+        let snapshot = makeSnapshot(fiveHourRemaining: resetAlert ? 100 : 15)
+        let first = Task { await service.evaluateNotifications(for: snapshot, settings: settings) }
+        await delivery.waitUntilSuspended()
+        await service.evaluateNotifications(for: snapshot, settings: settings)
+        await delivery.resume()
+        await first.value
+
+        #expect(await tracker.identifiers == [resetAlert ? "codexmeter-codex-primary-reset" : "codexmeter-codex-primary-threshold-20"])
+    }
+
+    @Test(arguments: [false, true])
+    func suspendedDeliveryDoesNotOverwriteNewerObservation(resetAlert: Bool) async {
+        let tracker = NotificationTracker()
+        let delivery = BlockingNotificationDelivery()
+        let service = NotificationService(
+            authorizationRequester: { true }, authorizationStatusProvider: { .authorized },
+            requestDeliverer: { request in
+                await tracker.record(request: request)
+                await delivery.suspendFirstDelivery()
+            }
+        )
+        let settings = notificationSettings(threshold: resetAlert ? nil : .twenty, resetNotificationsEnabled: resetAlert)
+        let rearmedSnapshot = makeSnapshot(fiveHourRemaining: resetAlert ? 42 : 25)
+        if resetAlert {
+            await service.evaluateNotifications(for: rearmedSnapshot, settings: settings)
+        }
+        let snapshot = makeSnapshot(fiveHourRemaining: resetAlert ? 100 : 15)
+        let first = Task { await service.evaluateNotifications(for: snapshot, settings: settings) }
+        await delivery.waitUntilSuspended()
+        await service.evaluateNotifications(for: rearmedSnapshot, settings: settings)
+        await delivery.resume()
+        await first.value
+        await service.evaluateNotifications(for: snapshot, settings: settings)
+
+        #expect(await tracker.identifiers.count == 2)
+    }
+
+    @Test
+    func differentNotificationEventsHaveSeparateIdentifiers() async {
+        let tracker = NotificationTracker()
+        let service = makeNotificationService(tracker: tracker)
+        let settings: [UsageMeterID: MeterPreferences] = [
+            .secondary: MeterPreferences(notificationThreshold: .twenty, resetNotificationsEnabled: true),
+            .credits: MeterPreferences(creditsNotificationThreshold: .ten, creditsAddedNotificationsEnabled: true),
+            .usageLimitResets: MeterPreferences(resetsUsedNotificationsEnabled: true, resetsAddedNotificationsEnabled: true)
+        ]
+        await service.evaluateNotifications(for: snapshotWithBalances(weeklyRemaining: 15, credits: 9, resets: 3), settings: settings)
+        await service.evaluateNotifications(for: snapshotWithBalances(weeklyRemaining: 100, credits: 20, resets: 2), settings: settings)
+        await service.evaluateNotifications(for: snapshotWithBalances(weeklyRemaining: 100, credits: 20, resets: 4), settings: settings)
+        let identifiers = await tracker.identifiers
+        #expect(identifiers.count == 6)
+        #expect(Set(identifiers).count == 6)
     }
 
     @Test
@@ -314,6 +482,19 @@ struct NotificationServiceTests {
         #expect(await tracker.identifiers == ["codexmeter-codex-primary-reset"])
     }
 
+    @Test(arguments: [false, true])
+    func resetNotificationsCompareWithLastAvailableObservation(omitted: Bool) async {
+        let tracker = NotificationTracker()
+        let service = makeNotificationService(tracker: tracker)
+        let settings = notificationSettings(resetNotificationsEnabled: true)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 42), settings: settings)
+        await service.evaluateNotifications(for: missingSnapshot(omitted: omitted), settings: omitted ? [:] : settings)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 99), settings: settings)
+        await service.evaluateNotifications(for: missingSnapshot(omitted: omitted), settings: omitted ? [:] : settings)
+        await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 100), settings: settings)
+        #expect(await tracker.identifiers == ["codexmeter-codex-primary-reset"])
+    }
+
     @Test
     func disabledMeterDoesNotNotify() async {
         let tracker = NotificationTracker()
@@ -369,6 +550,46 @@ struct NotificationServiceTests {
         #expect(identifiers.count == 2)
         #expect(Set(identifiers).count == 2)
     }
+}
+
+private actor BlockingNotificationDelivery {
+    private var hasDelivered = false
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var observer: CheckedContinuation<Void, Never>?
+
+    func suspendFirstDelivery() async {
+        guard !hasDelivered else { return }
+        hasDelivered = true
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+            observer?.resume()
+            observer = nil
+        }
+    }
+
+    func waitUntilSuspended() async {
+        guard continuation == nil else { return }
+        await withCheckedContinuation { observer = $0 }
+    }
+
+    func resume() {
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
+private func missingSnapshot(omitted: Bool) -> UsageSnapshot {
+    omitted
+        ? UsageSnapshot(meters: [], lastUpdated: Date(), warningMessage: nil)
+        : balanceSnapshot()
+}
+
+private func snapshotWithBalances(weeklyRemaining: Int, credits: Double, resets: Int? = nil) -> UsageSnapshot {
+    UsageSnapshot(
+        meters: makeSnapshot(weeklyRemaining: weeklyRemaining).meters.filter { $0.kind == .rateLimit }
+            + balanceSnapshot(credits: credits, resets: resets).meters.filter { $0.kind != .rateLimit },
+        lastUpdated: Date(), warningMessage: nil
+    )
 }
 
 private func balanceSnapshot(credits: Double? = nil, resets: Int? = nil) -> UsageSnapshot {
