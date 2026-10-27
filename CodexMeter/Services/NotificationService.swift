@@ -20,6 +20,8 @@ actor NotificationService: NotificationScheduling {
     }
 
     nonisolated private static let resetRemainingPercent = 99
+    // Derived reset times can vary slightly with request latency and whole-second countdowns.
+    nonisolated private static let resetDateTolerance: TimeInterval = 60
 
     private let authorizationRequester: @Sendable () async throws -> Bool
     private let authorizationStatusProvider: @Sendable () async -> UNAuthorizationStatus
@@ -75,10 +77,20 @@ actor NotificationService: NotificationScheduling {
         for meter: UsageMeterViewData,
         preferences: MeterPreferences
     ) {
-        guard meter.isAvailable, preferences.isVisible,
-              amountNotificationsEnabled(for: meter, preferences: preferences),
-              let amount = meter.remainingAmount, amount.isFinite else {
+        guard preferences.isVisible,
+              amountNotificationsEnabled(for: meter, preferences: preferences) else {
             amountStateByMeter[meter.id] = nil
+            return
+        }
+
+        guard meter.isAvailable, let amount = meter.remainingAmount, amount.isFinite else {
+            if var state = amountStateByMeter[meter.id] {
+                if state.preferences.creditsNotificationThreshold != preferences.creditsNotificationThreshold {
+                    state.hasNotifiedLow = false
+                }
+                state.preferences = preferences
+                amountStateByMeter[meter.id] = state
+            }
             return
         }
 
@@ -107,23 +119,30 @@ actor NotificationService: NotificationScheduling {
         for snapshot: UsageSnapshot,
         settings: [UsageMeterID: MeterPreferences]
     ) async {
+        // Only explicit preference changes clear history. Missing or unavailable
+        // observations must leave the last successful observation intact.
+        for meter in snapshot.meters {
+            let preferences = settings[meter.id] ?? MeterPreferences()
+            if !preferences.isVisible || preferences.notificationThreshold == nil {
+                thresholdStateByMeter[meter.id] = nil
+            }
+            if !preferences.isVisible || !preferences.resetNotificationsEnabled {
+                resetStateByMeter[meter.id] = nil
+            }
+            if !preferences.isVisible || !amountNotificationsEnabled(for: meter, preferences: preferences) {
+                amountStateByMeter[meter.id] = nil
+            }
+        }
+
         let enabledMeters = snapshot.meters.filter { meter in
             meter.isAvailable
                 && meter.supportsNotifications
                 && (settings[meter.id] ?? MeterPreferences()).isVisible
         }
-        let enabledIDs = Set(enabledMeters.map(\.id))
-        thresholdStateByMeter = thresholdStateByMeter.filter {
-            enabledIDs.contains($0.key) && settings[$0.key]?.notificationThreshold != nil
-        }
-        resetStateByMeter = resetStateByMeter.filter {
-            enabledIDs.contains($0.key) && settings[$0.key]?.resetNotificationsEnabled == true
-        }
         let amountEnabledIDs = Set(enabledMeters.filter { meter in
             let preferences = settings[meter.id] ?? MeterPreferences()
             return amountNotificationsEnabled(for: meter, preferences: preferences)
         }.map(\.id))
-        amountStateByMeter = amountStateByMeter.filter { amountEnabledIDs.contains($0.key) }
 
         guard enabledMeters.contains(where: { meter in
             let preferences = settings[meter.id] ?? MeterPreferences()
@@ -157,7 +176,6 @@ actor NotificationService: NotificationScheduling {
 
     private func evaluateAmountNotifications(meter: UsageMeterViewData, preferences: MeterPreferences) async {
         guard let amount = meter.remainingAmount, amount.isFinite else {
-            amountStateByMeter[meter.id] = nil
             return
         }
         let previous = amountStateByMeter[meter.id]
@@ -237,17 +255,26 @@ actor NotificationService: NotificationScheduling {
         var notificationState = thresholdStateByMeter[meter.id]
             ?? ThresholdNotificationState(threshold: threshold)
 
-        if notificationState.threshold != threshold || notificationState.resetDate != meter.resetDate {
+        let resetWindowChanged: Bool
+        if let previousReset = notificationState.resetDate, let resetDate = meter.resetDate {
+            resetWindowChanged = abs(resetDate.timeIntervalSince(previousReset)) > Self.resetDateTolerance
+        } else {
+            resetWindowChanged = false
+        }
+        if notificationState.threshold != threshold || resetWindowChanged {
             notificationState = ThresholdNotificationState(
                 threshold: threshold,
                 resetDate: meter.resetDate,
                 hasNotified: false
             )
         }
+        if notificationState.resetDate == nil {
+            notificationState.resetDate = meter.resetDate
+        }
 
         if remainingPercent > threshold.rawValue {
             notificationState.hasNotified = false
-            notificationState.resetDate = meter.resetDate
+            notificationState.resetDate = meter.resetDate ?? notificationState.resetDate
             thresholdStateByMeter[meter.id] = notificationState
             return
         }
@@ -273,10 +300,10 @@ actor NotificationService: NotificationScheduling {
             trigger: nil
         )
 
-        await requestDeliverer(request)
+        // Reserve the event before delivery yields to another evaluation.
         notificationState.hasNotified = true
-        notificationState.resetDate = meter.resetDate
         thresholdStateByMeter[meter.id] = notificationState
+        await requestDeliverer(request)
     }
 
     private func evaluateResetNotification(meter: UsageMeterViewData, remainingPercent: Int) async {
@@ -287,10 +314,6 @@ actor NotificationService: NotificationScheduling {
             notificationState.hasNotifiedAtResetLevel = false
             resetStateByMeter[meter.id] = notificationState
             return
-        }
-
-        defer {
-            resetStateByMeter[meter.id] = notificationState
         }
 
         guard notificationState.hasSeenBelowResetLevel,
@@ -314,8 +337,9 @@ actor NotificationService: NotificationScheduling {
             trigger: nil
         )
 
-        await requestDeliverer(request)
         notificationState.hasNotifiedAtResetLevel = true
+        resetStateByMeter[meter.id] = notificationState
+        await requestDeliverer(request)
     }
 
     private func bodyText(prefix: String, resetText: String?) -> String {
