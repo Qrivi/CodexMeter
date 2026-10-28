@@ -256,17 +256,163 @@ struct NotificationServiceTests {
     }
 
     @Test
-    func newServiceStillAlertsOnStartupWithLowValues() async {
+    func lowAlertsPersistAcrossRestartsAndMissingReadings() async {
+        let suite = "NotificationHistoryTests.\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
         let tracker = NotificationTracker()
         let settings: [UsageMeterID: MeterPreferences] = [
             .secondary: MeterPreferences(notificationThreshold: .twenty),
             .credits: MeterPreferences(creditsNotificationThreshold: .ten)
         ]
-        for _ in 0..<2 {
-            let service = makeNotificationService(tracker: tracker)
+        for _ in 0..<3 {
+            let service = makeNotificationService(tracker: tracker, userDefaults: UserDefaults(suiteName: suite)!)
+            await service.evaluateNotifications(for: missingSnapshot(omitted: true), settings: [:])
+            await service.evaluateNotifications(for: missingSnapshot(omitted: false), settings: settings)
             await service.evaluateNotifications(for: snapshotWithBalances(weeklyRemaining: 15, credits: 9), settings: settings)
         }
+        #expect(await tracker.identifiers == ["codexmeter-codex-secondary-threshold-20", "codexmeter-credits-threshold-10"])
+    }
+
+    @Test
+    func recoveryWithoutAnAlertPersistsAndRearmsLowAlerts() async {
+        let suite = "NotificationHistoryTests.\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let tracker = NotificationTracker()
+        let settings: [UsageMeterID: MeterPreferences] = [
+            .secondary: MeterPreferences(notificationThreshold: .twenty),
+            .credits: MeterPreferences(creditsNotificationThreshold: .ten)
+        ]
+        let first = makeNotificationService(tracker: tracker, userDefaults: defaults)
+        await first.evaluateNotifications(for: snapshotWithBalances(weeklyRemaining: 15, credits: 9), settings: settings)
+        await first.evaluateNotifications(for: snapshotWithBalances(weeklyRemaining: 25, credits: 20), settings: settings)
+        #expect(await tracker.identifiers.count == 2)
+        let restarted = makeNotificationService(tracker: tracker, userDefaults: UserDefaults(suiteName: suite)!)
+        await restarted.evaluateNotifications(for: snapshotWithBalances(weeklyRemaining: 15, credits: 9), settings: settings)
         #expect(await tracker.identifiers.count == 4)
+    }
+
+    @Test
+    func aNewUsageWindowCanNotifyAfterRestart() async {
+        let suite = "NotificationHistoryTests.\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let tracker = NotificationTracker()
+        let settings = notificationSettings(threshold: .twenty)
+        for reset in [100.0, 100, 200, 200] {
+            let service = makeNotificationService(tracker: tracker, userDefaults: UserDefaults(suiteName: suite)!)
+            await service.evaluateNotifications(
+                for: makeSnapshot(fiveHourRemaining: 15, fiveHourReset: Date(timeIntervalSince1970: reset)), settings: settings
+            )
+        }
+        #expect(await tracker.identifiers == ["codexmeter-codex-primary-threshold-20", "codexmeter-codex-primary-threshold-20"])
+    }
+
+    @Test
+    func resetAndBalanceEventsPersistAcrossRestartsAndStillDetectNewChanges() async {
+        let suite = "NotificationHistoryTests.\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let tracker = NotificationTracker()
+        let settings: [UsageMeterID: MeterPreferences] = [
+            .secondary: MeterPreferences(notificationThreshold: .twenty, resetNotificationsEnabled: true),
+            .credits: MeterPreferences(creditsNotificationThreshold: .ten, creditsAddedNotificationsEnabled: true),
+            .usageLimitResets: MeterPreferences(resetsUsedNotificationsEnabled: true, resetsAddedNotificationsEnabled: true)
+        ]
+        let snapshots = [
+            snapshotWithBalances(weeklyRemaining: 15, credits: 9, resets: 3),
+            snapshotWithBalances(weeklyRemaining: 100, credits: 20, resets: 4),
+            snapshotWithBalances(weeklyRemaining: 15, credits: 9, resets: 2)
+        ]
+        for snapshot in snapshots {
+            for _ in 0..<2 {
+                let service = makeNotificationService(tracker: tracker, userDefaults: UserDefaults(suiteName: suite)!)
+                await service.evaluateNotifications(for: snapshot, settings: settings)
+            }
+        }
+        #expect(await tracker.bodies == [
+            "Weekly limit reached 20% remaining. Resets May 6, 2026 10:30 AM (1d 0h)",
+            "9 credits remaining.",
+            "Weekly limit reset. 100% remaining. Resets May 6, 2026 10:30 AM (1d 0h)",
+            "20 credits remaining.",
+            "4 usage limit resets remaining.",
+            "Weekly limit reached 20% remaining. Resets May 6, 2026 10:30 AM (1d 0h)",
+            "9 credits remaining.",
+            "2 usage limit resets remaining. A reset was used or expired."
+        ])
+    }
+
+    @Test
+    func anObservationBelowResetLevelIsRememberedAcrossRestart() async {
+        let suite = "NotificationHistoryTests.\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let tracker = NotificationTracker()
+        let settings = notificationSettings(resetNotificationsEnabled: true)
+        let first = makeNotificationService(tracker: tracker, userDefaults: defaults)
+        await first.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 42), settings: settings)
+        let restarted = makeNotificationService(tracker: tracker, userDefaults: UserDefaults(suiteName: suite)!)
+        await restarted.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 100), settings: settings)
+        #expect(await tracker.identifiers == ["codexmeter-codex-primary-reset"])
+    }
+
+    @Test
+    func balancePreferenceUpdatesPersistWithoutRepeatingLowAlerts() async throws {
+        let suite = "NotificationHistoryTests.\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let tracker = NotificationTracker()
+        var preferences = MeterPreferences(creditsNotificationThreshold: .ten)
+        let first = makeNotificationService(tracker: tracker, userDefaults: defaults)
+        await first.evaluateNotifications(for: balanceSnapshot(credits: 9), settings: [.credits: preferences])
+        preferences.creditsAddedNotificationsEnabled = true
+        await first.updateAmountNotificationPreferences(
+            for: try #require(balanceSnapshot(credits: 9).creditsMeter), preferences: preferences
+        )
+        let restarted = makeNotificationService(tracker: tracker, userDefaults: UserDefaults(suiteName: suite)!)
+        await restarted.evaluateNotifications(for: balanceSnapshot(credits: 8), settings: [.credits: preferences])
+        await restarted.evaluateNotifications(for: balanceSnapshot(credits: 20), settings: [.credits: preferences])
+        #expect(await tracker.bodies == ["9 credits remaining.", "20 credits remaining."])
+    }
+
+    @Test(arguments: [UNAuthorizationStatus.denied, .notDetermined])
+    func startingWithoutPermissionDoesNotEraseHistory(status: UNAuthorizationStatus) async {
+        let suite = "NotificationHistoryTests.\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let tracker = NotificationTracker()
+        let settings: [UsageMeterID: MeterPreferences] = [
+            .secondary: MeterPreferences(notificationThreshold: .twenty),
+            .credits: MeterPreferences(creditsNotificationThreshold: .ten)
+        ]
+        let snapshot = snapshotWithBalances(weeklyRemaining: 15, credits: 9)
+        await makeNotificationService(tracker: tracker, userDefaults: defaults)
+            .evaluateNotifications(for: snapshot, settings: settings)
+        let denied = NotificationService(
+            authorizationRequester: { false }, authorizationStatusProvider: { status },
+            requestDeliverer: { request in await tracker.record(request: request) },
+            userDefaults: UserDefaults(suiteName: suite)!
+        )
+        await denied.evaluateNotifications(for: snapshot, settings: [:])
+        await makeNotificationService(tracker: tracker, userDefaults: UserDefaults(suiteName: suite)!)
+            .evaluateNotifications(for: snapshot, settings: settings)
+        #expect(await tracker.identifiers.count == 2)
+    }
+
+    @Test
+    func invalidStoredHistoryDoesNotPreventNotificationsOrRecovery() async {
+        let suite = "NotificationHistoryTests.\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(Data("invalid history".utf8), forKey: "notificationHistory.v1")
+        let tracker = NotificationTracker()
+        let settings = notificationSettings(threshold: .twenty)
+        for _ in 0..<2 {
+            let service = makeNotificationService(tracker: tracker, userDefaults: UserDefaults(suiteName: suite)!)
+            await service.evaluateNotifications(for: makeSnapshot(fiveHourRemaining: 15), settings: settings)
+        }
+        #expect(await tracker.identifiers == ["codexmeter-codex-primary-threshold-20"])
     }
 
     @Test
@@ -303,6 +449,9 @@ struct NotificationServiceTests {
 
     @Test(arguments: [false, true])
     func overlappingEvaluationsDoNotRepeatAlerts(resetAlert: Bool) async {
+        let suite = "NotificationHistoryTests.\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
         let tracker = NotificationTracker()
         let delivery = BlockingNotificationDelivery()
         let service = NotificationService(
@@ -310,7 +459,8 @@ struct NotificationServiceTests {
             requestDeliverer: { request in
                 await tracker.record(request: request)
                 await delivery.suspendFirstDelivery()
-            }
+            },
+            userDefaults: defaults
         )
         let settings = notificationSettings(threshold: resetAlert ? nil : .twenty, resetNotificationsEnabled: resetAlert)
         if resetAlert {
@@ -320,6 +470,10 @@ struct NotificationServiceTests {
         let first = Task { await service.evaluateNotifications(for: snapshot, settings: settings) }
         await delivery.waitUntilSuspended()
         await service.evaluateNotifications(for: snapshot, settings: settings)
+        // Even a new instance sees the reservation while the original delivery
+        // is suspended, so termination during delivery cannot replay the event.
+        let restarted = makeNotificationService(tracker: tracker, userDefaults: UserDefaults(suiteName: suite)!)
+        await restarted.evaluateNotifications(for: snapshot, settings: settings)
         await delivery.resume()
         await first.value
 
@@ -549,6 +703,25 @@ struct NotificationServiceTests {
         let identifiers = await tracker.identifiers
         #expect(identifiers.count == 2)
         #expect(Set(identifiers).count == 2)
+    }
+
+    @Test
+    func dynamicMeterHistorySurvivesRestart() async {
+        let suite = "NotificationHistoryTests.\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let tracker = NotificationTracker()
+        let meterID = UsageMeterID.additional(feature: "codex/feature.with-punctuation", slot: .secondary)
+        let snapshot = UsageSnapshot(meters: [UsageMeterViewData(
+            id: meterID, kind: .rateLimit, title: "Additional usage", valueText: "15% remaining",
+            resetText: nil, remainingPercent: 15, level: .critical,
+            resetDate: Date(timeIntervalSince1970: 100), isAvailable: true
+        )], lastUpdated: Date(), warningMessage: nil)
+        for _ in 0..<2 {
+            let service = makeNotificationService(tracker: tracker, userDefaults: UserDefaults(suiteName: suite)!)
+            await service.evaluateNotifications(for: snapshot, settings: [meterID: MeterPreferences(notificationThreshold: .twenty)])
+        }
+        #expect(await tracker.identifiers.count == 1)
     }
 }
 

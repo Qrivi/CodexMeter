@@ -224,13 +224,14 @@ final class MockLoginItemService: LoginItemManaging, @unchecked Sendable {
     }
 }
 
-func makeNotificationService(tracker: NotificationTracker) -> NotificationService {
+func makeNotificationService(tracker: NotificationTracker, userDefaults: UserDefaults? = nil) -> NotificationService {
     NotificationService(
         authorizationRequester: { true },
         authorizationStatusProvider: { .authorized },
         requestDeliverer: { request in
             await tracker.record(request: request)
-        }
+        },
+        userDefaults: userDefaults
     )
 }
 

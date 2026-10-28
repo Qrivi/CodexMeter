@@ -2,23 +2,30 @@ import Foundation
 @preconcurrency import UserNotifications
 
 actor NotificationService: NotificationScheduling {
-    private struct ThresholdNotificationState: Sendable {
+    private struct ThresholdNotificationState: Codable, Sendable {
         var threshold: NotificationThreshold?
         var resetDate: Date?
         var hasNotified = false
     }
 
-    private struct ResetNotificationState: Sendable {
+    private struct ResetNotificationState: Codable, Sendable {
         var hasSeenBelowResetLevel = false
         var hasNotifiedAtResetLevel = false
     }
 
-    private struct AmountNotificationState: Sendable {
+    private struct AmountNotificationState: Codable, Sendable {
         var amount: Double
         var preferences: MeterPreferences
         var hasNotifiedLow = false
     }
 
+    private struct NotificationHistory: Codable, Sendable {
+        var thresholds: [UsageMeterID: ThresholdNotificationState]
+        var resets: [UsageMeterID: ResetNotificationState]
+        var amounts: [UsageMeterID: AmountNotificationState]
+    }
+
+    nonisolated private static let historyKey = "notificationHistory.v1"
     nonisolated private static let resetRemainingPercent = 99
     // Derived reset times can vary slightly with request latency and whole-second countdowns.
     nonisolated private static let resetDateTolerance: TimeInterval = 60
@@ -26,32 +33,53 @@ actor NotificationService: NotificationScheduling {
     private let authorizationRequester: @Sendable () async throws -> Bool
     private let authorizationStatusProvider: @Sendable () async -> UNAuthorizationStatus
     private let requestDeliverer: @Sendable (UNNotificationRequest) async -> Void
+    private let userDefaults: UserDefaults?
     private var thresholdStateByMeter: [UsageMeterID: ThresholdNotificationState] = [:]
     private var resetStateByMeter: [UsageMeterID: ResetNotificationState] = [:]
     private var amountStateByMeter: [UsageMeterID: AmountNotificationState] = [:]
 
-    init(center: UNUserNotificationCenter = .current()) {
-        self.authorizationRequester = {
-            try await center.requestAuthorization(options: [.alert, .sound])
-        }
-
-        self.authorizationStatusProvider = {
-            await center.notificationSettings().authorizationStatus
-        }
-
-        self.requestDeliverer = { request in
-            try? await center.add(request)
-        }
+    init(center: UNUserNotificationCenter = .current(), userDefaults: UserDefaults = .standard) {
+        self.init(
+            authorizationRequester: {
+                try await center.requestAuthorization(options: [.alert, .sound])
+            },
+            authorizationStatusProvider: {
+                await center.notificationSettings().authorizationStatus
+            },
+            requestDeliverer: { request in
+                try? await center.add(request)
+            },
+            userDefaults: userDefaults
+        )
     }
 
     init(
         authorizationRequester: @escaping @Sendable () async throws -> Bool,
         authorizationStatusProvider: @escaping @Sendable () async -> UNAuthorizationStatus,
-        requestDeliverer: @escaping @Sendable (UNNotificationRequest) async -> Void
+        requestDeliverer: @escaping @Sendable (UNNotificationRequest) async -> Void,
+        userDefaults: UserDefaults? = nil
     ) {
         self.authorizationRequester = authorizationRequester
         self.authorizationStatusProvider = authorizationStatusProvider
         self.requestDeliverer = requestDeliverer
+        self.userDefaults = userDefaults
+        if let data = userDefaults?.data(forKey: Self.historyKey),
+           let history = try? JSONDecoder().decode(NotificationHistory.self, from: data) {
+            thresholdStateByMeter = history.thresholds
+            resetStateByMeter = history.resets
+            amountStateByMeter = history.amounts
+        }
+    }
+
+    private func persistHistory() {
+        guard let userDefaults else { return }
+        let history = NotificationHistory(
+            thresholds: thresholdStateByMeter,
+            resets: resetStateByMeter,
+            amounts: amountStateByMeter
+        )
+        guard let data = try? JSONEncoder().encode(history) else { return }
+        userDefaults.set(data, forKey: Self.historyKey)
     }
 
     func authorizationStatus() async -> UNAuthorizationStatus {
@@ -77,6 +105,7 @@ actor NotificationService: NotificationScheduling {
         for meter: UsageMeterViewData,
         preferences: MeterPreferences
     ) {
+        defer { persistHistory() }
         guard preferences.isVisible,
               amountNotificationsEnabled(for: meter, preferences: preferences) else {
             amountStateByMeter[meter.id] = nil
@@ -119,6 +148,12 @@ actor NotificationService: NotificationScheduling {
         for snapshot: UsageSnapshot,
         settings: [UsageMeterID: MeterPreferences]
     ) async {
+        // A denied or not-yet-known permission is not a new notification event.
+        // Preserve history so restoring permission cannot replay delivered alerts.
+        let status = await authorizationStatusProvider()
+        guard [.authorized, .provisional].contains(status) else { return }
+
+        defer { persistHistory() }
         // Only explicit preference changes clear history. Missing or unavailable
         // observations must leave the last successful observation intact.
         for meter in snapshot.meters {
@@ -149,14 +184,6 @@ actor NotificationService: NotificationScheduling {
             return preferences.notificationThreshold != nil || preferences.resetNotificationsEnabled
                 || amountEnabledIDs.contains(meter.id)
         }) else {
-            return
-        }
-
-        let status = await authorizationStatusProvider()
-        guard [.authorized, .provisional].contains(status) else {
-            thresholdStateByMeter.removeAll()
-            resetStateByMeter.removeAll()
-            amountStateByMeter.removeAll()
             return
         }
 
@@ -212,6 +239,9 @@ actor NotificationService: NotificationScheduling {
 
         // Record the observation before delivery yields to another evaluation.
         amountStateByMeter[meter.id] = state
+        if !messages.isEmpty {
+            persistHistory()
+        }
         for message in messages {
             let content = UNMutableNotificationContent()
             content.title = message.title
@@ -303,6 +333,7 @@ actor NotificationService: NotificationScheduling {
         // Reserve the event before delivery yields to another evaluation.
         notificationState.hasNotified = true
         thresholdStateByMeter[meter.id] = notificationState
+        persistHistory()
         await requestDeliverer(request)
     }
 
@@ -339,6 +370,7 @@ actor NotificationService: NotificationScheduling {
 
         notificationState.hasNotifiedAtResetLevel = true
         resetStateByMeter[meter.id] = notificationState
+        persistHistory()
         await requestDeliverer(request)
     }
 

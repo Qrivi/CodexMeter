@@ -465,7 +465,9 @@ final class UsageViewModel: ObservableObject {
     @discardableResult
     private func enqueueNotificationEvaluation(for snapshot: UsageSnapshot) -> Task<Void, Never> {
         let settings = Dictionary(uniqueKeysWithValues: snapshot.meters.map { meter in
-            (meter.id, notificationPreferences(for: meter.id))
+            // The service checks permission itself. Masking saved settings with
+            // an unknown or stale UI status could erase restored alert history.
+            (meter.id, preferences(for: meter.id))
         })
         let previousTask = notificationTask
         let task = Task { [notificationService] in
@@ -518,7 +520,7 @@ final class UsageViewModel: ObservableObject {
         }
 
         // Apply preference changes in order before evaluating the next fetched balance.
-        let effectivePreferences = notificationPreferences(for: meterID)
+        let effectivePreferences = preferences
         let previousTask = notificationTask
         notificationTask = Task { [notificationService] in
             await previousTask?.value
